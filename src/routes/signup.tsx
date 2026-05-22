@@ -50,7 +50,7 @@ function SignupPage() {
           <div className="size-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
             <Zap className="size-5 text-white" />
           </div>
-          PulseCRM
+          Call to Grow
         </div>
         <div className="relative space-y-4">
           <h1 className="font-display text-4xl font-bold leading-tight">Start closing in minutes.</h1>

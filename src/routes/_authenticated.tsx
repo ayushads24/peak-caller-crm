@@ -48,7 +48,7 @@ function Layout() {
           <div className="size-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-glow">
             <Zap className="size-4 text-white" />
           </div>
-          PulseCRM
+          Call to Grow
         </div>
         <nav className="flex-1 flex flex-col gap-1 mt-2">
           {navItems.map((item) => (
