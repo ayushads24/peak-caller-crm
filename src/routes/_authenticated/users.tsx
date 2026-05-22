@@ -6,7 +6,6 @@ import {
   adminListUsers, adminCreateUser, adminUpdateUser, adminDeleteUser,
   adminListTeams, adminCreateTeam, adminUpdateTeam, adminDeleteTeam,
 } from "@/lib/admin-users.functions";
-import { listPermissions, setRolePermission } from "@/lib/permissions.functions";
 import { PermissionsMatrix } from "@/components/users/permissions-matrix";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
