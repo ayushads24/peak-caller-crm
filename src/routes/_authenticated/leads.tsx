@@ -560,7 +560,12 @@ function CreateLeadDialog({ open, onOpenChange, statuses, onCreated }: {
   open: boolean; onOpenChange: (v: boolean) => void; statuses: StatusRow[]; onCreated: () => void;
 }) {
   const { user } = useAuth();
+  const fresh = statuses.find((s) => s.name.toLowerCase() === "fresh");
   const [form, setForm] = useState({ client_name: "", email: "", phone: "", sales_value: "", lead_source: "", status_id: "" });
+  useEffect(() => {
+    if (!form.status_id && fresh) setForm((f) => ({ ...f, status_id: fresh.id }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh?.id]);
   const [saving, setSaving] = useState(false);
 
   async function submit() {
@@ -585,13 +590,13 @@ function CreateLeadDialog({ open, onOpenChange, statuses, onCreated }: {
       phone: form.phone || null,
       sales_value: form.sales_value ? Number(form.sales_value) : null,
       lead_source: form.lead_source || null,
-      status_id: form.status_id || statuses[0]?.id || null,
+      status_id: form.status_id || fresh?.id || statuses[0]?.id || null,
       created_by: user.id,
     });
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Lead created");
-    setForm({ client_name: "", email: "", phone: "", sales_value: "", lead_source: "", status_id: "" });
+    setForm({ client_name: "", email: "", phone: "", sales_value: "", lead_source: "", status_id: fresh?.id ?? "" });
     onOpenChange(false);
     onCreated();
   }
