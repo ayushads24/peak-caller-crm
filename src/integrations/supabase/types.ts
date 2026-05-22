@@ -79,6 +79,107 @@ export type Database = {
         }
         Relationships: []
       }
+      breaks: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          started_at: string
+          type: Database["public"]["Enums"]["break_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          type?: Database["public"]["Enums"]["break_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          type?: Database["public"]["Enums"]["break_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      calling_flow_items: {
+        Row: {
+          attempts_done: number
+          attempts_planned: number
+          category: Database["public"]["Enums"]["flow_category"]
+          completed_at: string | null
+          created_at: string
+          flow_id: string
+          id: string
+          lead_id: string
+          priority: number
+          status: Database["public"]["Enums"]["flow_item_status"]
+        }
+        Insert: {
+          attempts_done?: number
+          attempts_planned?: number
+          category: Database["public"]["Enums"]["flow_category"]
+          completed_at?: string | null
+          created_at?: string
+          flow_id: string
+          id?: string
+          lead_id: string
+          priority?: number
+          status?: Database["public"]["Enums"]["flow_item_status"]
+        }
+        Update: {
+          attempts_done?: number
+          attempts_planned?: number
+          category?: Database["public"]["Enums"]["flow_category"]
+          completed_at?: string | null
+          created_at?: string
+          flow_id?: string
+          id?: string
+          lead_id?: string
+          priority?: number
+          status?: Database["public"]["Enums"]["flow_item_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calling_flow_items_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "calling_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calling_flows: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          status: Database["public"]["Enums"]["flow_status"]
+          user_id: string
+          work_date: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          status?: Database["public"]["Enums"]["flow_status"]
+          user_id: string
+          work_date?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          status?: Database["public"]["Enums"]["flow_status"]
+          user_id?: string
+          work_date?: string
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           called_at: string
@@ -443,12 +544,25 @@ export type Database = {
         | "lead_updated"
         | "label_changed"
       app_role: "admin" | "manager" | "caller"
+      break_type: "lunch" | "tea" | "meeting" | "other"
       call_status:
         | "connected"
         | "not_connected"
         | "voicemail"
         | "busy"
         | "wrong_number"
+      flow_category:
+        | "fresh"
+        | "interested_meeting"
+        | "quotation_sent"
+        | "followup"
+      flow_item_status:
+        | "pending"
+        | "in_progress"
+        | "done"
+        | "skipped"
+        | "rescheduled"
+      flow_status: "active" | "paused" | "completed"
       meeting_status: "scheduled" | "completed" | "cancelled" | "rescheduled"
       task_status: "pending" | "in_progress" | "completed"
     }
@@ -592,6 +706,7 @@ export const Constants = {
         "label_changed",
       ],
       app_role: ["admin", "manager", "caller"],
+      break_type: ["lunch", "tea", "meeting", "other"],
       call_status: [
         "connected",
         "not_connected",
@@ -599,6 +714,20 @@ export const Constants = {
         "busy",
         "wrong_number",
       ],
+      flow_category: [
+        "fresh",
+        "interested_meeting",
+        "quotation_sent",
+        "followup",
+      ],
+      flow_item_status: [
+        "pending",
+        "in_progress",
+        "done",
+        "skipped",
+        "rescheduled",
+      ],
+      flow_status: ["active", "paused", "completed"],
       meeting_status: ["scheduled", "completed", "cancelled", "rescheduled"],
       task_status: ["pending", "in_progress", "completed"],
     },
