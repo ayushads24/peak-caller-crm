@@ -80,7 +80,6 @@ export function LeadsFilterBar({
   profiles: ProfileLite[];
   teams: { id: string; name: string }[];
 }) {
-  void profiles; void teams;
   const count = useMemo(() => activeCount(filters), [filters]);
 
   function set<K extends keyof LeadFilters>(k: K, v: LeadFilters[K]) { onChange({ ...filters, [k]: v }); }
@@ -125,7 +124,7 @@ export function LeadsFilterBar({
           onClear={() => set("sources", [])}
         />
 
-        <DateFilter filters={filters} onChange={onChange} />
+        <AssignedFilter filters={filters} onChange={onChange} profiles={profiles} />
 
         <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
 
