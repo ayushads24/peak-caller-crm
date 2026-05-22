@@ -6,6 +6,7 @@ import {
   adminListUsers, adminCreateUser, adminUpdateUser, adminDeleteUser,
   adminListTeams, adminCreateTeam, adminUpdateTeam, adminDeleteTeam,
 } from "@/lib/admin-users.functions";
+import { listPermissions, setRolePermission } from "@/lib/permissions.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Pencil, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, Pencil, ShieldAlert, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/users")({ component: Page });
@@ -36,6 +37,8 @@ interface UserRow {
   email: string | null;
   full_name: string | null;
   phone: string | null;
+  designation: string | null;
+  last_login_at: string | null;
   is_active: boolean;
   team_id: string | null;
   team_name: string | null;
@@ -71,6 +74,8 @@ function Admin() {
   const listTeams = useServerFn(adminListTeams);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("__all__");
 
   async function reload() {
     const [u, t] = await Promise.all([listUsers(), listTeams()]);
@@ -78,6 +83,14 @@ function Admin() {
     setTeams(t as TeamRow[]);
   }
   useEffect(() => { void reload(); }, []);
+
+  const filteredUsers = users.filter((u) => {
+    if (roleFilter !== "__all__" && !u.roles.includes(roleFilter)) return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return [u.full_name, u.email, u.phone, u.designation, u.team_name]
+      .some((v) => v?.toLowerCase().includes(q));
+  });
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-in fade-in duration-500">
@@ -90,22 +103,34 @@ function Admin() {
 
       <Tabs defaultValue="users">
         <TabsList>
-          <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
+          <TabsTrigger value="users">Users ({filteredUsers.length})</TabsTrigger>
           <TabsTrigger value="teams">Teams ({teams.length})</TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4">
           <Card className="p-4 sm:p-6 shadow-card">
-            <div className="flex justify-end mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone..." className="pl-9" />
+              </div>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All roles</SelectItem>
+                  {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <UserDialog teams={teams} onSaved={reload}>
                 <Button className="bg-gradient-primary"><Plus className="size-4 mr-1" /> New user</Button>
               </UserDialog>
             </div>
             <div className="space-y-2">
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <UserRowItem key={u.id} user={u} teams={teams} onChanged={reload} />
               ))}
-              {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No users yet.</p>}
+              {filteredUsers.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No users match your filters.</p>}
             </div>
           </Card>
         </TabsContent>
@@ -125,6 +150,10 @@ function Admin() {
             </div>
           </Card>
         </TabsContent>
+
+        <TabsContent value="permissions" className="mt-4">
+          <PermissionsMatrix />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -134,11 +163,15 @@ function UserRowItem({ user, teams, onChanged }: { user: UserRow; teams: TeamRow
   const del = useServerFn(adminDeleteUser);
   const update = useServerFn(adminUpdateUser);
   const role = (user.roles[0] as Role) ?? "caller";
+  const lastLogin = user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Never";
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border bg-card p-3">
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{user.full_name || user.email}</div>
-        <div className="text-xs text-muted-foreground truncate">{user.email} {user.phone && `· ${user.phone}`}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {user.email} {user.phone && `· ${user.phone}`} {user.designation && `· ${user.designation}`}
+        </div>
+        <div className="text-[11px] text-muted-foreground mt-0.5">Last login: {lastLogin}</div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{ROLE_LABELS[role] ?? role}</Badge>
