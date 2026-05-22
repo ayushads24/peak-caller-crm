@@ -19,8 +19,11 @@ import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
+import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicWebhookFacebookRouteImport } from './routes/api/public/webhook.facebook'
+import { Route as ApiPublicWebhookDoubletickRouteImport } from './routes/api/public/webhook.doubletick'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -71,6 +74,12 @@ const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedIntegrationsRoute =
+  AuthenticatedIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -81,6 +90,18 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicWebhookFacebookRoute =
+  ApiPublicWebhookFacebookRouteImport.update({
+    id: '/api/public/webhook/facebook',
+    path: '/api/public/webhook/facebook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWebhookDoubletickRoute =
+  ApiPublicWebhookDoubletickRouteImport.update({
+    id: '/api/public/webhook/doubletick',
+    path: '/api/public/webhook/doubletick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -90,10 +111,13 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/import': typeof AuthenticatedImportRoute
+  '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -103,10 +127,13 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/import': typeof AuthenticatedImportRoute
+  '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,10 +145,13 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
+  '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -133,10 +163,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/dashboard'
     | '/import'
+    | '/integrations'
     | '/leads'
     | '/settings'
     | '/users'
     | '/workflow'
+    | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -146,10 +179,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/dashboard'
     | '/import'
+    | '/integrations'
     | '/leads'
     | '/settings'
     | '/users'
     | '/workflow'
+    | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   id:
     | '__root__'
     | '/'
@@ -160,10 +196,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_authenticated/dashboard'
     | '/_authenticated/import'
+    | '/_authenticated/integrations'
     | '/_authenticated/leads'
     | '/_authenticated/settings'
     | '/_authenticated/users'
     | '/_authenticated/workflow'
+    | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -173,6 +212,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiPublicWebhookDoubletickRoute: typeof ApiPublicWebhookDoubletickRoute
+  ApiPublicWebhookFacebookRoute: typeof ApiPublicWebhookFacebookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -247,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/integrations': {
+      id: '/_authenticated/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof AuthenticatedIntegrationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/import': {
       id: '/_authenticated/import'
       path: '/import'
@@ -261,12 +309,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/webhook/facebook': {
+      id: '/api/public/webhook/facebook'
+      path: '/api/public/webhook/facebook'
+      fullPath: '/api/public/webhook/facebook'
+      preLoaderRoute: typeof ApiPublicWebhookFacebookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/webhook/doubletick': {
+      id: '/api/public/webhook/doubletick'
+      path: '/api/public/webhook/doubletick'
+      fullPath: '/api/public/webhook/doubletick'
+      preLoaderRoute: typeof ApiPublicWebhookDoubletickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
+  AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
@@ -276,6 +339,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
+  AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
@@ -293,6 +357,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiPublicWebhookDoubletickRoute: ApiPublicWebhookDoubletickRoute,
+  ApiPublicWebhookFacebookRoute: ApiPublicWebhookFacebookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

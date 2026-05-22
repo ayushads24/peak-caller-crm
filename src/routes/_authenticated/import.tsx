@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, History } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2, History, Download } from "lucide-react";
 import { toast } from "sonner";
 import { format, parse as parseDate, isValid } from "date-fns";
 
@@ -124,6 +124,34 @@ function ImportPage() {
   }
 
   function handleFile(file: File) {
+    setFilename(file.name);
+    void parseChosenFile(file);
+  }
+
+  function downloadSample() {
+    const sample = [
+      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Notes", "Created Date", "Follow-up Date"],
+      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Interested in premium plan", "08/05/2026", "15/05/2026"],
+      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Asked for callback", "10/05/2026", "12/05/2026"],
+      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "Sent quote on whatsapp", "12/05/2026", ""],
+    ];
+    const csv = sample.map((row) =>
+      row.map((c) => {
+        const s = String(c);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(",")
+    ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "leads-import-sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Sample file downloaded");
+  }
+
+  function parseChosenFile(file: File) {
     setFilename(file.name);
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext === "csv") {
@@ -344,6 +372,9 @@ function ImportPage() {
           <Button onClick={() => fileRef.current?.click()} className="gap-2">
             <Upload className="size-4" /> Choose file
           </Button>
+          <Button variant="outline" onClick={downloadSample} className="gap-2">
+            <Download className="size-4" /> Sample file
+          </Button>
           {filename && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileSpreadsheet className="size-4" />
@@ -354,6 +385,7 @@ function ImportPage() {
         </div>
         <p className="text-xs text-muted-foreground mt-3">
           Supports .csv, .xlsx, .xls. Duplicates detected by phone number. Dates accept Excel serials, ISO, dd/MM/yyyy, MM/dd/yyyy.
+          Need a template? Click <span className="font-medium">Sample file</span> to download a ready-to-fill CSV with all supported columns.
         </p>
       </Card>
 
