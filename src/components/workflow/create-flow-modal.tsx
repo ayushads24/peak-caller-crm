@@ -96,15 +96,16 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
 
     // Replace existing flow for today
     const workDate = format(new Date(), "yyyy-MM-dd");
+    const flowName = `Workflow — ${format(new Date(), "MMM d, yyyy")}`;
     await supabase.from("calling_flows").delete().eq("user_id", user.id).eq("work_date", workDate);
-    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: workDate, status: "active" }).select("id").single();
+    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: workDate, status: "active", name: flowName }).select("id").single();
     if (error || !flow) { setBusy(false); return toast.error(error?.message ?? "Failed"); }
 
     const rows = queue.map((q) => ({ flow_id: flow.id, ...q }));
     const { error: e2 } = await supabase.from("calling_flow_items").insert(rows);
     setBusy(false);
     if (e2) return toast.error(e2.message);
-    toast.success(`Flow created with ${queue.length} leads`);
+    toast.success(`Workflow created with ${queue.length} leads`);
     onCreated(flow.id);
     onOpenChange(false);
   }
@@ -113,7 +114,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Create Today's Calling Flow</DialogTitle>
+          <DialogTitle className="font-display text-xl">Create Today's Workflow</DialogTitle>
           <p className="text-sm text-muted-foreground">Pick categories, date range, and daily attempts. Order = call priority.</p>
         </DialogHeader>
         <div className="space-y-3 mt-2">
@@ -157,7 +158,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
         <DialogFooter className="mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={start} disabled={busy} className="bg-gradient-primary">
-            {busy && <Loader2 className="size-4 mr-2 animate-spin" />}Start flow
+            {busy && <Loader2 className="size-4 mr-2 animate-spin" />}Start workflow
           </Button>
         </DialogFooter>
       </DialogContent>

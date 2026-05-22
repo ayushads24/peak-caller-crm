@@ -48,8 +48,8 @@ function LoginPage() {
           PulseCRM
         </div>
         <div className="relative space-y-4">
-          <h1 className="font-display text-4xl font-bold leading-tight">The calling CRM built for speed.</h1>
-          <p className="text-[var(--sidebar-muted)] max-w-md">Manage leads, track pipeline, and close deals faster with a workspace built for telecalling teams.</p>
+          <h1 className="font-display text-4xl font-bold leading-tight">The sales CRM built for speed.</h1>
+          <p className="text-[var(--sidebar-muted)] max-w-md">Manage leads, track pipeline, and close deals faster with a workspace built for high-performance sales teams.</p>
         </div>
       </div>
       <div className="flex items-center justify-center p-6 sm:p-12 bg-background">

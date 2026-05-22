@@ -32,7 +32,7 @@ function Layout() {
 
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/calling", icon: Phone, label: "Calling" },
+    { to: "/workflow", icon: Phone, label: "Workflow" },
     { to: "/leads", icon: Users, label: "Leads" },
     { to: "/settings", icon: Settings, label: "Settings" },
   ] as const;

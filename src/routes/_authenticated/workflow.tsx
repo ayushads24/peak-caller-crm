@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw } from "lucide-react";
-import { CreateFlowModal, type FlowCategory } from "@/components/calling/create-flow-modal";
-import { PostCallSheet } from "@/components/calling/post-call-sheet";
+import { CreateFlowModal, type FlowCategory } from "@/components/workflow/create-flow-modal";
+import { PostCallSheet } from "@/components/workflow/post-call-sheet";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/calling")({ component: Page });
+export const Route = createFileRoute("/_authenticated/workflow")({ component: Page });
 
 interface Item {
   id: string; lead_id: string; category: FlowCategory; priority: number;
@@ -47,7 +47,7 @@ function Page() {
 
   useEffect(() => {
     if (!user) return;
-    const ch = supabase.channel("calling-rt")
+    const ch = supabase.channel("workflow-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "calling_flow_items" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "breaks", filter: `user_id=eq.${user.id}` }, () => loadBreak())
       .subscribe();
@@ -120,10 +120,7 @@ function Page() {
   async function markAction(action: "done" | "skipped" | "complete_today") {
     if (!current) return;
     if (action === "complete_today") {
-      // attempts_done = attempts_planned so it leaves today's queue but isn't fully done
       await supabase.from("calling_flow_items").update({ attempts_done: current.attempts_planned, status: "pending", completed_at: null }).eq("id", current.id);
-      // We treat "attempts_done >= attempts_planned" as out-of-queue; need to re-filter
-      // Since pending leads remain pending in DB, also bump status to a soft "rescheduled" so it leaves the active queue.
       await supabase.from("calling_flow_items").update({ status: "rescheduled" }).eq("id", current.id);
     } else {
       await supabase.from("calling_flow_items").update({ status: action, completed_at: new Date().toISOString() }).eq("id", current.id);
@@ -151,9 +148,9 @@ function Page() {
           <div className="size-14 rounded-2xl bg-gradient-primary mx-auto flex items-center justify-center mb-4 shadow-glow">
             <Phone className="size-6 text-white" />
           </div>
-          <h1 className="font-display text-2xl font-bold">Start today's calling flow</h1>
+          <h1 className="font-display text-2xl font-bold">Start today's workflow</h1>
           <p className="text-muted-foreground mt-2">Pick the categories you'll work through today and we'll queue every lead in priority order.</p>
-          <Button onClick={() => setCreateOpen(true)} className="mt-6 bg-gradient-primary" size="lg"><Plus className="size-4 mr-2" />Create flow</Button>
+          <Button onClick={() => setCreateOpen(true)} className="mt-6 bg-gradient-primary" size="lg"><Plus className="size-4 mr-2" />Create workflow</Button>
         </Card>
         <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} />
       </div>
@@ -164,7 +161,7 @@ function Page() {
     <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Calling flow</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Workflow</h1>
           <p className="text-muted-foreground text-sm mt-1">{stats.done}/{stats.total} done · {stats.pending} pending · {stats.skipped} skipped</p>
         </div>
         <div className="flex items-center gap-2">
@@ -183,7 +180,7 @@ function Page() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" onClick={() => setCreateOpen(true)}><Plus className="size-4 mr-1" />New flow</Button>
+          <Button variant="outline" onClick={() => setCreateOpen(true)}><Plus className="size-4 mr-1" />New workflow</Button>
         </div>
       </div>
 
@@ -191,7 +188,7 @@ function Page() {
         <Card className="p-4 mb-4 border-amber-500/40 bg-amber-500/5">
           <div className="flex items-center gap-3"><Pause className="size-5 text-amber-600" />
             <div className="flex-1"><div className="font-medium capitalize">{activeBreak.type} break in progress</div>
-              <div className="text-xs text-muted-foreground">Started {format(new Date(activeBreak.started_at), "h:mm a")} — calling is paused</div>
+              <div className="text-xs text-muted-foreground">Started {format(new Date(activeBreak.started_at), "h:mm a")} — workflow is paused</div>
             </div>
           </div>
         </Card>
@@ -241,7 +238,7 @@ function Page() {
           ) : (
             <Card className="p-10 text-center shadow-card">
               <div className="size-12 rounded-full bg-emerald-500/15 text-emerald-600 mx-auto flex items-center justify-center mb-3"><CheckCircle2 className="size-6" /></div>
-              <h2 className="font-display text-xl font-bold">Flow complete</h2>
+              <h2 className="font-display text-xl font-bold">Workflow complete</h2>
               <p className="text-muted-foreground text-sm mt-1">All leads in today's queue have been handled.</p>
               <Button onClick={() => navigate({ to: "/dashboard" })} variant="outline" className="mt-4">Back to dashboard</Button>
             </Card>
