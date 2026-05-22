@@ -28,6 +28,7 @@ function Page() {
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [leadLabels, setLeadLabels] = useState<Map<string, Set<string>>>(new Map());
   const [followups, setFollowups] = useState<Map<string, Date>>(new Map());
@@ -50,7 +51,7 @@ function Page() {
   }, []);
 
   async function load() {
-    const [l, s, lb, p, t, ll, tk, ac] = await Promise.all([
+    const [l, s, lb, p, t, ll, tk, ac, ur] = await Promise.all([
       supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at, assigned_to, created_by").order("created_at", { ascending: false }),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color").order("name"),
@@ -59,12 +60,14 @@ function Page() {
       supabase.from("lead_labels").select("lead_id, label_id"),
       supabase.from("tasks").select("lead_id, due_date, status").eq("status", "pending").not("due_date", "is", null),
       supabase.from("activities").select("lead_id, created_by, created_at, metadata").eq("type", "status_changed").order("created_at", { ascending: false }).limit(2000),
+      supabase.from("user_roles").select("user_id, role").eq("role", "admin"),
     ]);
     setLeads((l.data ?? []) as LeadRow[]);
     setStatuses((s.data ?? []) as StatusRow[]);
     setLabels((lb.data ?? []) as LabelRow[]);
     setProfiles((p.data ?? []) as ProfileLite[]);
     setTeams((t.data ?? []) as { id: string; name: string }[]);
+    setAdminIds(new Set(((ur.data ?? []) as { user_id: string }[]).map((r) => r.user_id)));
 
     const llMap = new Map<string, Set<string>>();
     ((ll.data ?? []) as { lead_id: string; label_id: string }[]).forEach((r) => {
@@ -417,7 +420,7 @@ function Page() {
               <DropdownMenuItem onClick={() => bulkReassign(null)}>
                 <X className="size-3.5 mr-2" /> Unassigned
               </DropdownMenuItem>
-              {profiles.map((p) => (
+              {profiles.filter((p) => !adminIds.has(p.id)).map((p) => (
                 <DropdownMenuItem key={p.id} onClick={() => bulkReassign(p.id)}>
                   {p.full_name || p.email}
                 </DropdownMenuItem>
