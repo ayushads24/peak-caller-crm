@@ -90,7 +90,7 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
-    const profilePatch: Record<string, unknown> = {};
+    const profilePatch: Record<string, string | boolean | null> = {};
     if (data.full_name !== undefined) profilePatch.full_name = data.full_name;
     if (data.phone !== undefined) profilePatch.phone = data.phone;
     if (data.team_id !== undefined) profilePatch.team_id = data.team_id;
@@ -173,7 +173,7 @@ export const adminUpdateTeam = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
-    const patch: Record<string, unknown> = {};
+    const patch: Record<string, string | null> = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.leader_id !== undefined) patch.leader_id = data.leader_id;
     const { error } = await supabaseAdmin.from("teams").update(patch).eq("id", data.id);
