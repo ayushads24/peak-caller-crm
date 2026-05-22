@@ -27,6 +27,7 @@ async function loadRoles(userId: string): Promise<AppRole[]> {
 let initialized = false;
 function init() {
   if (initialized) return;
+  if (typeof window === "undefined") return;
   initialized = true;
   supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user) {
