@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch } from "lucide-react";
+import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch, User as UserIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { StatusRow, LabelRow } from "@/components/leads/lead-detail-sheet";
