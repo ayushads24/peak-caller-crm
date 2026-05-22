@@ -10,11 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Download, Upload, Phone, Mail } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
 import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/components/leads/lead-detail-sheet";
+import { LeadsFilterBar, EMPTY_FILTERS, type LeadFilters, type ProfileLite } from "@/components/leads/leads-filter-bar";
+import { LeadsAnalyticsStrip, type MovementEvent } from "@/components/leads/leads-analytics-strip";
 
 export const Route = createFileRoute("/_authenticated/leads")({ component: Page });
 
@@ -23,8 +25,12 @@ function Page() {
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [leadLabels, setLeadLabels] = useState<Map<string, Set<string>>>(new Map());
+  const [followups, setFollowups] = useState<Map<string, Date>>(new Map());
+  const [movements, setMovements] = useState<MovementEvent[]>([]);
+  const [filters, setFilters] = useState<LeadFilters>(EMPTY_FILTERS);
   const [active, setActive] = useState<LeadRow | null>(null);
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -39,25 +45,121 @@ function Page() {
   }, []);
 
   async function load() {
-    const [l, s, lb] = await Promise.all([
-      supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at").order("created_at", { ascending: false }),
+    const [l, s, lb, p, t, ll, tk, ac] = await Promise.all([
+      supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at, assigned_to, created_by").order("created_at", { ascending: false }),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color").order("name"),
+      supabase.from("profiles").select("id, full_name, email, team_id").order("full_name"),
+      supabase.from("teams").select("id, name").order("name"),
+      supabase.from("lead_labels").select("lead_id, label_id"),
+      supabase.from("tasks").select("lead_id, due_date, status").eq("status", "pending").not("due_date", "is", null),
+      supabase.from("activities").select("lead_id, created_by, created_at, metadata").eq("type", "status_changed").order("created_at", { ascending: false }).limit(2000),
     ]);
     setLeads((l.data ?? []) as LeadRow[]);
     setStatuses((s.data ?? []) as StatusRow[]);
     setLabels((lb.data ?? []) as LabelRow[]);
+    setProfiles((p.data ?? []) as ProfileLite[]);
+    setTeams((t.data ?? []) as { id: string; name: string }[]);
+
+    const llMap = new Map<string, Set<string>>();
+    ((ll.data ?? []) as { lead_id: string; label_id: string }[]).forEach((r) => {
+      if (!llMap.has(r.lead_id)) llMap.set(r.lead_id, new Set());
+      llMap.get(r.lead_id)!.add(r.label_id);
+    });
+    setLeadLabels(llMap);
+
+    const fuMap = new Map<string, Date>();
+    ((tk.data ?? []) as { lead_id: string; due_date: string | null }[]).forEach((r) => {
+      if (!r.due_date) return;
+      const d = new Date(r.due_date);
+      const existing = fuMap.get(r.lead_id);
+      if (!existing || d < existing) fuMap.set(r.lead_id, d);
+    });
+    setFollowups(fuMap);
+
+    const mv: MovementEvent[] = ((ac.data ?? []) as { lead_id: string; created_by: string | null; created_at: string; metadata: { from?: string; to?: string } | null }[])
+      .map((a) => ({
+        lead_id: a.lead_id,
+        created_by: a.created_by,
+        created_at: a.created_at,
+        from: a.metadata?.from ?? null,
+        to: a.metadata?.to ?? null,
+      }));
+    setMovements(mv);
   }
+
+  // Filter leads by movement criteria first → set of allowed lead ids (or null = no movement filter)
+  const movementLeadIds = useMemo<Set<string> | null>(() => {
+    const { moveFrom, moveTo, moveBy, moveDateFrom, moveDateTo } = filters;
+    const fromName = statuses.find((s) => s.id === moveFrom)?.name;
+    const toName = statuses.find((s) => s.id === moveTo)?.name;
+    const hasFilter = moveFrom !== "any" || moveTo !== "any" || moveBy !== "any" || moveDateFrom || moveDateTo;
+    if (!hasFilter) return null;
+    const set = new Set<string>();
+    for (const m of movements) {
+      if (fromName && m.from !== fromName) continue;
+      if (toName && m.to !== toName) continue;
+      if (moveBy !== "any" && m.created_by !== moveBy) continue;
+      const t = new Date(m.created_at).getTime();
+      if (moveDateFrom && t < moveDateFrom.getTime()) continue;
+      if (moveDateTo && t > moveDateTo.getTime() + 86400000) continue;
+      set.add(m.lead_id);
+    }
+    return set;
+  }, [movements, filters, statuses]);
+
+  const filteredMovements = useMemo(() => {
+    const { moveFrom, moveTo, moveBy, moveDateFrom, moveDateTo } = filters;
+    const fromName = statuses.find((s) => s.id === moveFrom)?.name;
+    const toName = statuses.find((s) => s.id === moveTo)?.name;
+    return movements.filter((m) => {
+      if (fromName && m.from !== fromName) return false;
+      if (toName && m.to !== toName) return false;
+      if (moveBy !== "any" && m.created_by !== moveBy) return false;
+      const t = new Date(m.created_at).getTime();
+      if (moveDateFrom && t < moveDateFrom.getTime()) return false;
+      if (moveDateTo && t > moveDateTo.getTime() + 86400000) return false;
+      return true;
+    });
+  }, [movements, filters, statuses]);
 
   const filtered = useMemo(() => {
     if (!leads) return [];
-    const q = search.trim().toLowerCase();
+    const q = filters.q.trim().toLowerCase();
+    const nameQ = filters.name.trim().toLowerCase();
+    const phoneQ = filters.phone.trim();
+    const min = filters.salesMin ? Number(filters.salesMin) : null;
+    const max = filters.salesMax ? Number(filters.salesMax) : null;
+    const teamMemberIds = filters.teamId !== "any"
+      ? new Set(profiles.filter((p) => (p as { team_id?: string }).team_id === filters.teamId).map((p) => p.id))
+      : null;
     return leads.filter((l) => {
-      if (statusFilter !== "all" && l.status_id !== statusFilter) return false;
-      if (!q) return true;
-      return [l.client_name, l.email, l.phone, l.lead_source].some((v) => v?.toLowerCase().includes(q));
+      if (movementLeadIds && !movementLeadIds.has(l.id)) return false;
+      if (filters.statusIds.length && (!l.status_id || !filters.statusIds.includes(l.status_id))) return false;
+      if (filters.sources.length && (!l.lead_source || !filters.sources.includes(l.lead_source))) return false;
+      if (filters.assignedTo !== "any" && l.assigned_to !== filters.assignedTo) return false;
+      if (filters.createdBy !== "any" && l.created_by !== filters.createdBy) return false;
+      if (teamMemberIds && !(l.assigned_to && teamMemberIds.has(l.assigned_to))) return false;
+      if (filters.labelIds.length) {
+        const set = leadLabels.get(l.id);
+        if (!set || !filters.labelIds.some((id) => set.has(id))) return false;
+      }
+      if (min !== null && (l.sales_value ?? 0) < min) return false;
+      if (max !== null && (l.sales_value ?? 0) > max) return false;
+      if (filters.dateFrom && new Date(l.created_at) < filters.dateFrom) return false;
+      if (filters.dateTo && new Date(l.created_at).getTime() > filters.dateTo.getTime() + 86400000) return false;
+      if (filters.followFrom || filters.followTo) {
+        const fu = followups.get(l.id);
+        if (!fu) return false;
+        if (filters.followFrom && fu < filters.followFrom) return false;
+        if (filters.followTo && fu.getTime() > filters.followTo.getTime() + 86400000) return false;
+      }
+      if (nameQ && !l.client_name.toLowerCase().includes(nameQ)) return false;
+      if (phoneQ && !(l.phone ?? "").includes(phoneQ)) return false;
+      if (q && ![l.client_name, l.email, l.phone, l.lead_source].some((v) => v?.toLowerCase().includes(q))) return false;
+      return true;
     });
-  }, [leads, search, statusFilter]);
+  }, [leads, filters, leadLabels, profiles, followups, movementLeadIds]);
 
   async function quickStatus(id: string, status_id: string) {
     const { error } = await supabase.from("leads").update({ status_id }).eq("id", id);
@@ -118,21 +220,22 @@ function Page() {
         </div>
       </div>
 
-      <Card className="mt-5 p-3 sm:p-4 shadow-card">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input placeholder="Search name, email, phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="sm:w-48"><SelectValue placeholder="All statuses" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
+      <LeadsFilterBar
+        filters={filters}
+        onChange={setFilters}
+        statuses={statuses}
+        labels={labels}
+        profiles={profiles}
+        teams={teams}
+      />
+
+      <LeadsAnalyticsStrip
+        total={leads?.length ?? 0}
+        leads={filtered}
+        statuses={statuses}
+        movements={filteredMovements}
+        profiles={profiles}
+      />
 
       {/* Desktop table */}
       <Card className="mt-4 shadow-card overflow-hidden hidden md:block">
