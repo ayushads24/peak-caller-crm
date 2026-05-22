@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,8 @@ interface StatusRow { id: string; name: string; color: string; is_sales: boolean
 interface LeadLite { id: string; client_name: string; status_id: string | null; sales_value: number | null; created_at: string; }
 
 function Page() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
+  const isManager = isAdminOrManager(roles);
   const navigate = useNavigate();
   const today = new Date();
   const [from, setFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
@@ -107,8 +109,9 @@ function Page() {
   const connectedCount = connectedLeadIds.size;
   const salesLeads = leads.filter((l) => salesStatus && l.status_id === salesStatus.id);
   const totalSalesValue = salesLeads.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0);
+  const conversionsCount = salesLeads.length;
   const conversionRate = connectedCount > 0
-    ? Math.round(((salesLeads.length + meetingsDone) / connectedCount) * 100)
+    ? Math.round(((conversionsCount + meetingsDone) / connectedCount) * 100)
     : 0;
 
   const byStatus = useMemo(() => {
@@ -179,13 +182,21 @@ function Page() {
     void doPunchOut();
   }
 
-  const kpis = [
-    { label: "Total Leads", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
-    { label: "Connected Leads", value: connectedCount, icon: PhoneCall, accent: "from-sky-500/20 to-sky-500/0" },
-    { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
-    { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
-    { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
-  ];
+  const kpis = isManager
+    ? [
+        { label: "Total Assigned Clients", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+        { label: "Conversions", value: conversionsCount, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+        { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
+      ]
+    : [
+        { label: "Total Leads", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Connected Leads", value: connectedCount, icon: PhoneCall, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+        { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
+      ];
 
   function setRange(preset: "today" | "week" | "month" | "all") {
     const now = new Date();
