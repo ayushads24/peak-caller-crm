@@ -90,11 +90,12 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
-    const profilePatch: Record<string, string | boolean | null> = {};
-    if (data.full_name !== undefined) profilePatch.full_name = data.full_name;
-    if (data.phone !== undefined) profilePatch.phone = data.phone;
-    if (data.team_id !== undefined) profilePatch.team_id = data.team_id;
-    if (data.is_active !== undefined) profilePatch.is_active = data.is_active;
+    const profilePatch = {
+      ...(data.full_name !== undefined && { full_name: data.full_name }),
+      ...(data.phone !== undefined && { phone: data.phone }),
+      ...(data.team_id !== undefined && { team_id: data.team_id }),
+      ...(data.is_active !== undefined && { is_active: data.is_active }),
+    };
     if (Object.keys(profilePatch).length > 0) {
       const { error } = await supabaseAdmin.from("profiles").update(profilePatch).eq("id", data.id);
       if (error) throw new Error(error.message);
@@ -173,9 +174,10 @@ export const adminUpdateTeam = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
-    const patch: Record<string, string | null> = {};
-    if (data.name !== undefined) patch.name = data.name;
-    if (data.leader_id !== undefined) patch.leader_id = data.leader_id;
+    const patch = {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.leader_id !== undefined && { leader_id: data.leader_id }),
+    };
     const { error } = await supabaseAdmin.from("teams").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
