@@ -546,7 +546,12 @@ export type Database = {
         | "assignment_changed"
         | "lead_updated"
         | "label_changed"
-      app_role: "admin" | "manager" | "caller"
+      app_role:
+        | "admin"
+        | "manager"
+        | "caller"
+        | "team_leader"
+        | "project_manager"
       break_type: "lunch" | "tea" | "meeting" | "other"
       call_status:
         | "connected"
@@ -708,7 +713,13 @@ export const Constants = {
         "lead_updated",
         "label_changed",
       ],
-      app_role: ["admin", "manager", "caller"],
+      app_role: [
+        "admin",
+        "manager",
+        "caller",
+        "team_leader",
+        "project_manager",
+      ],
       break_type: ["lunch", "tea", "meeting", "other"],
       call_status: [
         "connected",
