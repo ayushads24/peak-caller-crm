@@ -14,7 +14,7 @@ import { Plus, Search, Download, Upload, Phone, Mail } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
-import { LeadDetailSheet, type LeadRow, type StatusRow } from "@/components/leads/lead-detail-sheet";
+import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/components/leads/lead-detail-sheet";
 
 export const Route = createFileRoute("/_authenticated/leads")({ component: Page });
 
@@ -22,6 +22,7 @@ function Page() {
   const { user } = useAuth();
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
+  const [labels, setLabels] = useState<LabelRow[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [active, setActive] = useState<LeadRow | null>(null);
@@ -38,12 +39,14 @@ function Page() {
   }, []);
 
   async function load() {
-    const [l, s] = await Promise.all([
+    const [l, s, lb] = await Promise.all([
       supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at").order("created_at", { ascending: false }),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
+      supabase.from("labels").select("id, name, color").order("name"),
     ]);
     setLeads((l.data ?? []) as LeadRow[]);
     setStatuses((s.data ?? []) as StatusRow[]);
+    setLabels((lb.data ?? []) as LabelRow[]);
   }
 
   const filtered = useMemo(() => {
@@ -203,7 +206,7 @@ function Page() {
         )}
       </div>
 
-      <LeadDetailSheet lead={active} statuses={statuses} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
+      <LeadDetailSheet lead={active} statuses={statuses} labels={labels} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
     </div>
   );
 }
