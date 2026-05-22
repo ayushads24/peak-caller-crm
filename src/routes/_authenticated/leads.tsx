@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2 } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
@@ -226,9 +226,44 @@ function Page() {
     URL.revokeObjectURL(url);
   }
 
-  async function quickStatus(id: string, status_id: string) {
-    const { error } = await supabase.from("leads").update({ status_id }).eq("id", id);
-    if (error) toast.error(error.message); else toast.success("Status updated");
+  async function addLabelToLead(lead_id: string, label_id: string) {
+    if (!label_id) return;
+    const existing = leadLabels.get(lead_id);
+    if (existing?.has(label_id)) return;
+    const { error } = await supabase.from("lead_labels").insert({ lead_id, label_id });
+    if (error) return toast.error(error.message);
+    setLeadLabels((prev) => {
+      const n = new Map(prev);
+      const set = new Set(n.get(lead_id) ?? []);
+      set.add(label_id);
+      n.set(lead_id, set);
+      return n;
+    });
+  }
+  async function removeLabelFromLead(lead_id: string, label_id: string) {
+    const { error } = await supabase.from("lead_labels").delete().eq("lead_id", lead_id).eq("label_id", label_id);
+    if (error) return toast.error(error.message);
+    setLeadLabels((prev) => {
+      const n = new Map(prev);
+      const set = new Set(n.get(lead_id) ?? []);
+      set.delete(label_id);
+      n.set(lead_id, set);
+      return n;
+    });
+  }
+
+  function displayPhone(p: string | null | undefined) {
+    if (!p) return "";
+    const digits = p.replace(/\D/g, "");
+    if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+    if (digits.length === 13 && digits.startsWith("091")) return digits.slice(3);
+    return p;
+  }
+  async function copyPhone(p: string | null | undefined) {
+    const v = displayPhone(p);
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); toast.success("Phone copied"); }
+    catch { toast.error("Copy failed"); }
   }
 
   async function deleteLead(id: string) {
@@ -388,6 +423,7 @@ function Page() {
               <th className="text-left p-3 font-medium">Client</th>
               <th className="text-left p-3 font-medium">Contact</th>
               <th className="text-left p-3 font-medium">Status</th>
+              <th className="text-left p-3 font-medium">Labels</th>
               <th className="text-left p-3 font-medium">Value</th>
               <th className="text-left p-3 font-medium">Created</th>
               <th className="p-3 w-10"></th>
@@ -395,7 +431,7 @@ function Page() {
           </thead>
           <tbody>
             {leads === null && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-t"><td colSpan={7} className="p-3"><Skeleton className="h-6" /></td></tr>
+              <tr key={i} className="border-t"><td colSpan={8} className="p-3"><Skeleton className="h-6" /></td></tr>
             ))}
             {leads && pageLeads.map((l) => {
               const s = statuses.find((x) => x.id === l.status_id);
@@ -406,14 +442,37 @@ function Page() {
                     <Checkbox checked={isSel} onCheckedChange={() => toggleSelect(l.id)} aria-label="Select lead" />
                   </td>
                   <td className="p-3 font-medium">{l.client_name}{l.lead_source && <span className="ml-2 text-[10px] text-muted-foreground">· {l.lead_source}</span>}</td>
-                  <td className="p-3 text-muted-foreground"><div className="flex flex-col">{l.phone && <span>{l.phone}</span>}{l.email && <span className="text-xs truncate max-w-[180px]">{l.email}</span>}</div></td>
+                  <td className="p-3 text-muted-foreground">
+                    <div className="flex flex-col">
+                      {l.phone && (
+                        <span className="inline-flex items-center gap-1">
+                          <span>{displayPhone(l.phone)}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); void copyPhone(l.phone); }}
+                            className="opacity-60 hover:opacity-100 hover:text-foreground p-0.5 rounded"
+                            aria-label="Copy phone"
+                          >
+                            <Copy className="size-3" />
+                          </button>
+                        </span>
+                      )}
+                      {l.email && <span className="text-xs truncate max-w-[180px]">{l.email}</span>}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    {s ? (
+                      <Badge className="border-0" style={{ background: s.color, color: "white" }}>{s.name}</Badge>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                    <Select value={l.status_id ?? ""} onValueChange={(v) => quickStatus(l.id, v)}>
-                      <SelectTrigger className="h-7 w-32 border-0 px-2" style={s ? { background: `${s.color}22`, color: s.color } : undefined}>
-                        <SelectValue placeholder="—" />
-                      </SelectTrigger>
-                      <SelectContent>{statuses.map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <LeadLabelsCell
+                      leadId={l.id}
+                      assignedIds={leadLabels.get(l.id) ?? new Set()}
+                      labels={labels}
+                      onAdd={(lid) => addLabelToLead(l.id, lid)}
+                      onRemove={(lid) => removeLabelFromLead(l.id, lid)}
+                    />
                   </td>
                   <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
@@ -426,7 +485,7 @@ function Page() {
               );
             })}
             {leads && filtered.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
+              <tr><td colSpan={8} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -446,7 +505,12 @@ function Page() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold truncate">{l.client_name}</p>
-                  {l.phone && <p className="text-xs text-muted-foreground truncate">{l.phone}</p>}
+                  {l.phone && (
+                    <p className="text-xs text-muted-foreground truncate inline-flex items-center gap-1">
+                      {displayPhone(l.phone)}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); void copyPhone(l.phone); }} className="opacity-60 hover:opacity-100 p-0.5"><Copy className="size-3" /></button>
+                    </p>
+                  )}
                   {l.email && <p className="text-xs text-muted-foreground truncate">{l.email}</p>}
                 </div>
                 {s && <Badge className="border-0 shrink-0" style={{ background: s.color, color: "white" }}>{s.name}</Badge>}
@@ -454,7 +518,7 @@ function Page() {
               <div className="flex items-center justify-between mt-2">
                 <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</span>
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  {l.phone && <Button asChild size="icon" variant="outline" className="size-8"><a href={`tel:${l.phone}`}><Phone className="size-3.5" /></a></Button>}
+                {l.phone && <Button asChild size="icon" variant="outline" className="size-8"><a href={`tel:${displayPhone(l.phone)}`}><Phone className="size-3.5" /></a></Button>}
                   {l.email && <Button asChild size="icon" variant="outline" className="size-8"><a href={`mailto:${l.email}`}><Mail className="size-3.5" /></a></Button>}
                   <Button size="icon" variant="outline" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
                     <Trash2 className="size-3.5" />
