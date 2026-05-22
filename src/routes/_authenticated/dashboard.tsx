@@ -129,7 +129,7 @@ function Page() {
 
   async function punchOut() {
     if (!user || !punch) return;
-    // Check pending calling flow items
+    // Check pending workflow items
     const workDate = format(new Date(), "yyyy-MM-dd");
     const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
     if (flow) {
@@ -241,7 +241,7 @@ function Page() {
                   : (
                     <div className="space-y-2">
                       <Button onClick={() => setCreateFlowOpen(true)} size="sm" className="w-full bg-gradient-primary"><Phone className="size-3 mr-2" />Create today's flow</Button>
-                      <Button onClick={() => navigate({ to: "/calling" })} variant="outline" size="sm" className="w-full">Open calling</Button>
+                      <Button onClick={() => navigate({ to: "/workflow" })} variant="outline" size="sm" className="w-full">Open workflow</Button>
                       <Button onClick={punchOut} disabled={busyPunch} variant="ghost" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>
                     </div>
                   )}
@@ -333,13 +333,13 @@ function Page() {
         </SheetContent>
       </Sheet>
 
-      <CreateFlowModal open={createFlowOpen} onOpenChange={setCreateFlowOpen} onCreated={() => navigate({ to: "/calling" })} />
+      <CreateFlowModal open={createFlowOpen} onOpenChange={setCreateFlowOpen} onCreated={() => navigate({ to: "/workflow" })} />
 
       <AlertDialog open={!!punchOutGuard} onOpenChange={(v) => !v && setPunchOutGuard(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Pending calls detected</AlertDialogTitle>
-            <AlertDialogDescription>You have {punchOutGuard?.pending} leads still in today's calling queue. What would you like to do?</AlertDialogDescription>
+            <AlertDialogDescription>You have {punchOutGuard?.pending} leads still in today's workflow queue. What would you like to do?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Keep working</AlertDialogCancel>
