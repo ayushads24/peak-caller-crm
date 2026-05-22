@@ -393,14 +393,40 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          action: string
+          key: string
+          label: string
+          module: string
+          sort_order: number
+        }
+        Insert: {
+          action: string
+          key: string
+          label: string
+          module: string
+          sort_order?: number
+        }
+        Update: {
+          action?: string
+          key?: string
+          label?: string
+          module?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
+          designation: string | null
           email: string | null
           full_name: string | null
           id: string
           is_active: boolean
+          last_login_at: string | null
           phone: string | null
           team_id: string | null
           updated_at: string
@@ -408,10 +434,12 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          designation?: string | null
           email?: string | null
           full_name?: string | null
           id: string
           is_active?: boolean
+          last_login_at?: string | null
           phone?: string | null
           team_id?: string | null
           updated_at?: string
@@ -419,10 +447,12 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          designation?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           is_active?: boolean
+          last_login_at?: string | null
           phone?: string | null
           team_id?: string | null
           updated_at?: string
@@ -434,6 +464,29 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          permission_key: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          permission_key: string
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          permission_key?: string
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -563,6 +616,10 @@ export type Database = {
     Functions: {
       can_access_lead: {
         Args: { _lead_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_permission: {
+        Args: { _key: string; _user_id: string }
         Returns: boolean
       }
       has_role: {
