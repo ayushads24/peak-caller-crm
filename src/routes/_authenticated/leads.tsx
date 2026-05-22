@@ -164,7 +164,7 @@ function Page() {
                       <SelectContent>{statuses.map((x) => <SelectItem key={x.id} value={x.id}>{x.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
-                  <td className="p-3 font-medium">{l.sales_value ? `$${Number(l.sales_value).toLocaleString()}` : "—"}</td>
+                  <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
                 </tr>
               );
