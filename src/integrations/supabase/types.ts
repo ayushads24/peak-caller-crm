@@ -158,6 +158,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           id: string
+          name: string | null
           status: Database["public"]["Enums"]["flow_status"]
           user_id: string
           work_date: string
@@ -166,6 +167,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          name?: string | null
           status?: Database["public"]["Enums"]["flow_status"]
           user_id: string
           work_date?: string
@@ -174,6 +176,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           id?: string
+          name?: string | null
           status?: Database["public"]["Enums"]["flow_status"]
           user_id?: string
           work_date?: string
