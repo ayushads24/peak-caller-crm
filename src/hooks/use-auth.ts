@@ -9,9 +9,10 @@ export interface AuthState {
   session: Session | null;
   loading: boolean;
   roles: AppRole[];
+  permissions: Set<string>;
 }
 
-let cached: AuthState = { user: null, session: null, loading: true, roles: [] };
+let cached: AuthState = { user: null, session: null, loading: true, roles: [], permissions: new Set() };
 const listeners = new Set<(s: AuthState) => void>();
 
 function emit(next: AuthState) {
@@ -24,28 +25,51 @@ async function loadRoles(userId: string): Promise<AppRole[]> {
   return (data ?? []).map((r) => r.role as AppRole);
 }
 
+async function loadPermissions(roles: AppRole[]): Promise<Set<string>> {
+  if (roles.includes("admin")) {
+    // Admin: full access — fetch all permission keys
+    const { data } = await supabase.from("permissions").select("key");
+    return new Set((data ?? []).map((r) => r.key as string));
+  }
+  if (roles.length === 0) return new Set();
+  const { data } = await supabase
+    .from("role_permissions")
+    .select("permission_key")
+    .in("role", roles);
+  return new Set((data ?? []).map((r) => r.permission_key as string));
+}
+
+async function touchLastLogin(userId: string) {
+  try {
+    await supabase.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", userId);
+  } catch { /* ignore */ }
+}
+
 let initialized = false;
 function init() {
   if (initialized) return;
   if (typeof window === "undefined") return;
   initialized = true;
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     if (session?.user) {
       emit({ ...cached, user: session.user, session, loading: false });
       setTimeout(async () => {
         const roles = await loadRoles(session.user.id);
-        emit({ user: session.user, session, loading: false, roles });
+        const permissions = await loadPermissions(roles);
+        emit({ user: session.user, session, loading: false, roles, permissions });
+        if (event === "SIGNED_IN") void touchLastLogin(session.user.id);
       }, 0);
     } else {
-      emit({ user: null, session: null, loading: false, roles: [] });
+      emit({ user: null, session: null, loading: false, roles: [], permissions: new Set() });
     }
   });
   supabase.auth.getSession().then(async ({ data }) => {
     if (data.session?.user) {
       const roles = await loadRoles(data.session.user.id);
-      emit({ user: data.session.user, session: data.session, loading: false, roles });
+      const permissions = await loadPermissions(roles);
+      emit({ user: data.session.user, session: data.session, loading: false, roles, permissions });
     } else {
-      emit({ user: null, session: null, loading: false, roles: [] });
+      emit({ user: null, session: null, loading: false, roles: [], permissions: new Set() });
     }
   });
 }
@@ -73,4 +97,8 @@ export function isAdminOrManager(roles: AppRole[]) {
 
 export function isAdmin(roles: AppRole[]) {
   return roles.includes("admin");
+}
+
+export function hasPermission(permissions: Set<string>, key: string) {
+  return permissions.has(key);
 }

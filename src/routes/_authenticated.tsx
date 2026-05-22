@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useAuth, isAdmin } from "@/hooks/use-auth";
+import { useAuth, isAdmin, hasPermission } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog } from "lucide-react";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
 
 function Layout() {
-  const { user, loading, roles } = useAuth();
+  const { user, loading, roles, permissions } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,13 +30,14 @@ function Layout() {
     navigate({ to: "/login" });
   }
 
-  const navItems = [
-    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/workflow", icon: Phone, label: "Workflow" },
-    { to: "/leads", icon: Users, label: "Leads" },
-    ...(isAdmin(roles) ? [{ to: "/users", icon: UserCog, label: "Users" } as const] : []),
-    { to: "/settings", icon: Settings, label: "Settings" },
+  const allNav = [
+    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", perm: "dashboard.view" },
+    { to: "/workflow",  icon: Phone,           label: "Workflow",  perm: "workflow.view" },
+    { to: "/leads",     icon: Users,           label: "Leads",     perm: "leads.view" },
+    { to: "/users",     icon: UserCog,         label: "Users",     perm: "users.view" },
+    { to: "/settings",  icon: Settings,        label: "Settings",  perm: "settings.view" },
   ] as const;
+  const navItems = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
 
   return (
     <div className="min-h-screen flex bg-background">
