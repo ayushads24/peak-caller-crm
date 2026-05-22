@@ -35,7 +35,7 @@ function Layout() {
     { to: "/workflow",  icon: Phone,           label: "Workflow",  perm: "workflow.view" },
     { to: "/leads",     icon: Users,           label: "Leads",     perm: "leads.view" },
     { to: "/import",    icon: Upload,          label: "Import",    perm: "leads.import" },
-    { to: "/integrations", icon: Plug,         label: "Integrations", perm: "settings.view" },
+    { to: "/integrations", icon: Plug,         label: "Integrations", perm: "leads.view" },
     { to: "/users",     icon: UserCog,         label: "Users",     perm: "users.view" },
     { to: "/settings",  icon: Settings,        label: "Settings",  perm: "settings.view" },
   ] as const;

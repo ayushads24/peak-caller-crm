@@ -17,7 +17,7 @@ type IntegrationStats = { source: string; total: number; today: number; lastSync
 
 function IntegrationsPage() {
   const { roles, permissions } = useAuth();
-  const canView = isAdmin(roles) || hasPermission(permissions, "settings.view");
+  const canView = isAdmin(roles) || hasPermission(permissions, "leads.view");
   const [stats, setStats] = useState<Record<string, IntegrationStats>>({});
   const [loading, setLoading] = useState(true);
 
