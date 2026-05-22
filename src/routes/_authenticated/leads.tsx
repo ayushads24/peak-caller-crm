@@ -631,3 +631,44 @@ function CreateLeadDialog({ open, onOpenChange, statuses, onCreated }: {
     </Dialog>
   );
 }
+
+function LeadLabelsCell({ assignedIds, labels, onAdd, onRemove }: {
+  leadId: string;
+  assignedIds: Set<string>;
+  labels: LabelRow[];
+  onAdd: (labelId: string) => void;
+  onRemove: (labelId: string) => void;
+}) {
+  const assigned = labels.filter((l) => assignedIds.has(l.id));
+  const available = labels.filter((l) => !assignedIds.has(l.id));
+  return (
+    <div className="flex flex-wrap items-center gap-1 max-w-[240px]">
+      {assigned.map((l) => (
+        <Badge key={l.id} className="border-0 gap-1 pr-1 text-[10px]" style={{ background: l.color, color: "white" }}>
+          {l.name}
+          <button onClick={() => onRemove(l.id)} className="hover:bg-black/20 rounded-sm p-0.5" aria-label="Remove label">
+            <X className="size-2.5" />
+          </button>
+        </Badge>
+      ))}
+      {available.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="size-6 text-muted-foreground hover:text-foreground"><Plus className="size-3" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+            <DropdownMenuLabel>Add label</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {available.map((l) => (
+              <DropdownMenuItem key={l.id} onClick={() => onAdd(l.id)}>
+                <span className="size-2.5 rounded-full mr-2" style={{ background: l.color }} />
+                {l.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      {assigned.length === 0 && available.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+    </div>
+  );
+}
