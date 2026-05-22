@@ -53,7 +53,7 @@ function Page() {
       .channel("dashboard-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "calls" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => loadPunch())
       .subscribe();
