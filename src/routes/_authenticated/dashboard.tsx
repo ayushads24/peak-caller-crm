@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { CreateFlowModal } from "@/components/workflow/create-flow-modal";
-import { Users, PhoneCall, TrendingUp, CalendarCheck, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone } from "lucide-react";
+import { Users, PhoneCall, TrendingUp, CalendarCheck, CalendarPlus, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone, Percent } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -31,6 +31,7 @@ function Page() {
   const [leads, setLeads] = useState<LeadLite[]>([]);
   const [connectedLeadIds, setConnectedLeadIds] = useState<Set<string>>(new Set());
   const [meetingsDone, setMeetingsDone] = useState(0);
+  const [meetingsScheduled, setMeetingsScheduled] = useState(0);
   const [callsToday, setCallsToday] = useState(0);
   const [pendingTasks, setPendingTasks] = useState<{ id: string; title: string; due_date: string | null; lead_id: string }[]>([]);
   const [punch, setPunch] = useState<{ id: string; punch_in_at: string; punch_out_at: string | null } | null>(null);
@@ -74,12 +75,13 @@ function Page() {
     setLoading(true);
     const todayStart = startOfDay(new Date()).toISOString();
     const todayEnd = endOfDay(new Date()).toISOString();
-    const [s, l, calls, callsTodayRes, mAct, t, _p] = await Promise.all([
+    const [s, l, calls, callsTodayRes, mAct, mSched, t, _p] = await Promise.all([
       supabase.from("statuses").select("id, name, color, is_sales, sort_order").order("sort_order"),
       supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
       supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
       supabase.from("activities").select("lead_id, metadata").eq("type", "status_changed").gte("created_at", fromIso).lte("created_at", toIso),
+      supabase.from("meetings").select("id", { count: "exact", head: true }).gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
       supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50),
       loadPunch(),
     ]);
@@ -100,6 +102,7 @@ function Page() {
       if (to && meetingDoneNames.has(to)) mdLeadIds.add(a.lead_id);
     }
     setMeetingsDone(mdLeadIds.size);
+    setMeetingsScheduled(mSched.count ?? 0);
     setPendingTasks((t.data ?? []) as typeof pendingTasks);
     setLoading(false);
   }
@@ -113,6 +116,8 @@ function Page() {
   const conversionRate = connectedCount > 0
     ? Math.round(((conversionsCount + meetingsDone) / connectedCount) * 100)
     : 0;
+  const meetingConversionRate = meetingsDone > 0 ? Math.round((conversionsCount / meetingsDone) * 100) : 0;
+  const assignedConversionRate = totalLeads > 0 ? Math.round((conversionsCount / totalLeads) * 100) : 0;
 
   const byStatus = useMemo(() => {
     const map = new Map<string, LeadLite[]>();
@@ -185,9 +190,11 @@ function Page() {
   const kpis = isManager
     ? [
         { label: "Total Assigned Clients", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Meetings Scheduled", value: meetingsScheduled, icon: CalendarPlus, accent: "from-fuchsia-500/20 to-fuchsia-500/0" },
         { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
         { label: "Conversions", value: conversionsCount, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
-        { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Meeting → Sales Rate", value: `${meetingConversionRate}%`, icon: Percent, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Assigned → Sales Rate", value: `${assignedConversionRate}%`, icon: Percent, accent: "from-teal-500/20 to-teal-500/0" },
         { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
       ]
     : [
