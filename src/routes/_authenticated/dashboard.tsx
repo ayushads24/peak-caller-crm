@@ -72,20 +72,32 @@ function Page() {
     setLoading(true);
     const todayStart = startOfDay(new Date()).toISOString();
     const todayEnd = endOfDay(new Date()).toISOString();
-    const [s, l, calls, callsTodayRes, m, t, _p] = await Promise.all([
+    const [s, l, calls, callsTodayRes, mAct, t, _p] = await Promise.all([
       supabase.from("statuses").select("id, name, color, is_sales, sort_order").order("sort_order"),
       supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
       supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
-      supabase.from("meetings").select("id", { count: "exact", head: true }).eq("status", "completed").gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
+      supabase.from("activities").select("lead_id, metadata").eq("type", "status_changed").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50),
       loadPunch(),
     ]);
-    setStatuses((s.data ?? []) as StatusRow[]);
+    const statusRows = (s.data ?? []) as StatusRow[];
+    setStatuses(statusRows);
     setLeads((l.data ?? []) as LeadLite[]);
     setConnectedLeadIds(new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)));
     setCallsToday(callsTodayRes.count ?? 0);
-    setMeetingsDone(m.count ?? 0);
+    // Historical Meeting Done: any lead whose status changed TO a "Meeting Done" status within the range
+    const meetingDoneNames = new Set(
+      statusRows
+        .filter((st) => /meeting\s*done/i.test(st.name))
+        .map((st) => st.name.toLowerCase())
+    );
+    const mdLeadIds = new Set<string>();
+    for (const a of (mAct.data ?? []) as { lead_id: string; metadata: { to?: string } | null }[]) {
+      const to = a.metadata?.to?.toLowerCase();
+      if (to && meetingDoneNames.has(to)) mdLeadIds.add(a.lead_id);
+    }
+    setMeetingsDone(mdLeadIds.size);
     setPendingTasks((t.data ?? []) as typeof pendingTasks);
     setLoading(false);
   }
