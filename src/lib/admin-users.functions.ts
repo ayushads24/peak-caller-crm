@@ -14,6 +14,32 @@ async function assertAdmin(userId: string) {
   if (!isAdmin) throw new Error("Admin access required");
 }
 
+async function ensureTeamForLeader(userId: string, fallbackName?: string | null) {
+  const { data: existing, error: findError } = await supabaseAdmin
+    .from("teams")
+    .select("id")
+    .eq("leader_id", userId)
+    .maybeSingle();
+  if (findError) throw new Error(findError.message);
+  if (existing) return existing.id;
+
+  const { data: prof, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+
+  const label = fallbackName || prof?.full_name || prof?.email || "Team Leader";
+  const { data: created, error: createError } = await supabaseAdmin
+    .from("teams")
+    .insert({ name: `${label}'s Team`, leader_id: userId })
+    .select("id")
+    .single();
+  if (createError) throw new Error(createError.message);
+  return created.id;
+}
+
 export const adminListUsers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -74,17 +100,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
     // Role: trigger assigns 'caller' by default. Replace with the requested role.
     await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
     await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: data.role });
-    // Auto-create a team for team leaders so they appear in the "Team leader" picker.
-    if (data.role === "team_leader") {
-      const { data: existing } = await supabaseAdmin
-        .from("teams").select("id").eq("leader_id", uid).maybeSingle();
-      if (!existing) {
-        await supabaseAdmin.from("teams").insert({
-          name: `${data.full_name}'s Team`,
-          leader_id: uid,
-        });
-      }
-    }
+    if (data.role === "team_leader") await ensureTeamForLeader(uid, data.full_name);
     return { id: uid };
   });
 
@@ -118,19 +134,7 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
     if (data.role) {
       await supabaseAdmin.from("user_roles").delete().eq("user_id", data.id);
       await supabaseAdmin.from("user_roles").insert({ user_id: data.id, role: data.role });
-      if (data.role === "team_leader") {
-        const { data: existing } = await supabaseAdmin
-          .from("teams").select("id").eq("leader_id", data.id).maybeSingle();
-        if (!existing) {
-          const { data: prof } = await supabaseAdmin
-            .from("profiles").select("full_name, email").eq("id", data.id).maybeSingle();
-          const label = prof?.full_name || prof?.email || "Team";
-          await supabaseAdmin.from("teams").insert({
-            name: `${label}'s Team`,
-            leader_id: data.id,
-          });
-        }
-      }
+      if (data.role === "team_leader") await ensureTeamForLeader(data.id);
     }
     if (data.password) {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(data.id, { password: data.password });
@@ -154,6 +158,15 @@ export const adminListTeams = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context.userId);
+    const { data: teamLeaders, error: leaderError } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, profiles(full_name, email)")
+      .eq("role", "team_leader");
+    if (leaderError) throw new Error(leaderError.message);
+    await Promise.all((teamLeaders ?? []).map((row: { user_id: string; profiles?: { full_name: string | null; email: string | null } | null }) =>
+      ensureTeamForLeader(row.user_id, row.profiles?.full_name || row.profiles?.email),
+    ));
+
     const { data: teams } = await supabaseAdmin
       .from("teams")
       .select("id, name, leader_id, created_at")
