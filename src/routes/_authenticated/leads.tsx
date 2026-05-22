@@ -10,13 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Download, Upload, Phone, Mail } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
 import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/components/leads/lead-detail-sheet";
 import { LeadsFilterBar, EMPTY_FILTERS, type LeadFilters, type ProfileLite } from "@/components/leads/leads-filter-bar";
-import { LeadsAnalyticsStrip, type MovementEvent } from "@/components/leads/leads-analytics-strip";
+import type { MovementEvent } from "@/components/leads/leads-analytics-strip";
 
 export const Route = createFileRoute("/_authenticated/leads")({ component: Page });
 
@@ -33,6 +35,9 @@ function Page() {
   const [filters, setFilters] = useState<LeadFilters>(EMPTY_FILTERS);
   const [active, setActive] = useState<LeadRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 40;
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { void load(); }, []);
@@ -161,6 +166,66 @@ function Page() {
     });
   }, [leads, filters, leadLabels, profiles, followups, movementLeadIds]);
 
+  // Reset page + clear selection of off-page leads when filters change
+  useEffect(() => { setPage(1); }, [filters]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageLeads = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  const allPageSelected = pageLeads.length > 0 && pageLeads.every((l) => selected.has(l.id));
+  const someSelected = pageLeads.some((l) => selected.has(l.id));
+  function togglePageAll() {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allPageSelected) pageLeads.forEach((l) => n.delete(l.id));
+      else pageLeads.forEach((l) => n.add(l.id));
+      return n;
+    });
+  }
+  function selectAllFiltered() { setSelected(new Set(filtered.map((l) => l.id))); }
+  function clearSelection() { setSelected(new Set()); }
+
+  async function bulkUpdateStatus(status_id: string) {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const { error } = await supabase.from("leads").update({ status_id }).in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`Updated ${ids.length} leads`);
+    clearSelection();
+  }
+  async function bulkAddLabel(label_id: string) {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const rows = ids.map((lead_id) => ({ lead_id, label_id }));
+    const { error } = await supabase.from("lead_labels").upsert(rows, { onConflict: "lead_id,label_id", ignoreDuplicates: true });
+    if (error) return toast.error(error.message);
+    toast.success(`Labeled ${ids.length} leads`);
+    clearSelection();
+    load();
+  }
+  function exportSelected() {
+    const set = selected;
+    const rows = filtered.filter((l) => set.has(l.id)).map((l) => ({
+      client_name: l.client_name, email: l.email ?? "", phone: l.phone ?? "",
+      sales_value: l.sales_value ?? "", lead_source: l.lead_source ?? "",
+      status: statuses.find((s) => s.id === l.status_id)?.name ?? "",
+      created_at: l.created_at,
+    }));
+    if (!rows.length) return;
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `leads-selected-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function quickStatus(id: string, status_id: string) {
     const { error } = await supabase.from("leads").update({ status_id }).eq("id", id);
     if (error) toast.error(error.message); else toast.success("Status updated");
@@ -229,19 +294,73 @@ function Page() {
         teams={teams}
       />
 
-      <LeadsAnalyticsStrip
-        total={leads?.length ?? 0}
-        leads={filtered}
-        statuses={statuses}
-        movements={filteredMovements}
-        profiles={profiles}
-      />
+      {/* keep movements computed to satisfy memo deps; not displayed */}
+      <span className="hidden">{filteredMovements.length}</span>
+
+      {selected.size > 0 && (
+        <Card className="mt-3 p-2.5 shadow-card flex flex-wrap items-center gap-2 bg-primary/5 border-primary/30">
+          <Badge className="bg-primary text-primary-foreground">{selected.size} selected</Badge>
+          {selected.size < filtered.length && (
+            <Button variant="link" size="sm" className="h-7 px-1" onClick={selectAllFiltered}>
+              Select all {filtered.length} filtered
+            </Button>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1"><CircleDot className="size-3.5" /> Change status</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+              <DropdownMenuLabel>Set status to…</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {statuses.map((s) => (
+                <DropdownMenuItem key={s.id} onClick={() => bulkUpdateStatus(s.id)}>
+                  <span className="size-2.5 rounded-full mr-2" style={{ background: s.color }} />
+                  {s.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1"><Tag className="size-3.5" /> Add label</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+              <DropdownMenuLabel>Add label…</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {labels.length === 0 && <DropdownMenuItem disabled>No labels available</DropdownMenuItem>}
+              {labels.map((l) => (
+                <DropdownMenuItem key={l.id} onClick={() => bulkAddLabel(l.id)}>
+                  <span className="size-2.5 rounded-full mr-2" style={{ background: l.color }} />
+                  {l.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button size="sm" variant="outline" className="gap-1" onClick={exportSelected}>
+            <Download className="size-3.5" /> Export selected
+          </Button>
+
+          <Button size="sm" variant="ghost" className="ml-auto gap-1" onClick={clearSelection}>
+            <X className="size-3.5" /> Clear
+          </Button>
+        </Card>
+      )}
 
       {/* Desktop table */}
       <Card className="mt-4 shadow-card overflow-hidden hidden md:block">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
+              <th className="p-3 w-10">
+                <Checkbox
+                  checked={allPageSelected ? true : (someSelected ? "indeterminate" : false)}
+                  onCheckedChange={togglePageAll}
+                  aria-label="Select all on page"
+                />
+              </th>
               <th className="text-left p-3 font-medium">Client</th>
               <th className="text-left p-3 font-medium">Contact</th>
               <th className="text-left p-3 font-medium">Status</th>
@@ -251,12 +370,16 @@ function Page() {
           </thead>
           <tbody>
             {leads === null && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-t"><td colSpan={5} className="p-3"><Skeleton className="h-6" /></td></tr>
+              <tr key={i} className="border-t"><td colSpan={6} className="p-3"><Skeleton className="h-6" /></td></tr>
             ))}
-            {leads && filtered.map((l) => {
+            {leads && pageLeads.map((l) => {
               const s = statuses.find((x) => x.id === l.status_id);
+              const isSel = selected.has(l.id);
               return (
-                <tr key={l.id} onClick={() => setActive(l)} className="border-t hover:bg-accent/40 cursor-pointer transition-colors">
+                <tr key={l.id} onClick={() => setActive(l)} className={"border-t hover:bg-accent/40 cursor-pointer transition-colors " + (isSel ? "bg-primary/5" : "") }>
+                  <td className="p-3" onClick={(e) => { e.stopPropagation(); toggleSelect(l.id); }}>
+                    <Checkbox checked={isSel} onCheckedChange={() => toggleSelect(l.id)} aria-label="Select lead" />
+                  </td>
                   <td className="p-3 font-medium">{l.client_name}{l.lead_source && <span className="ml-2 text-[10px] text-muted-foreground">· {l.lead_source}</span>}</td>
                   <td className="p-3 text-muted-foreground"><div className="flex flex-col">{l.phone && <span>{l.phone}</span>}{l.email && <span className="text-xs truncate max-w-[180px]">{l.email}</span>}</div></td>
                   <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -273,7 +396,7 @@ function Page() {
               );
             })}
             {leads && filtered.length === 0 && (
-              <tr><td colSpan={5} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
+              <tr><td colSpan={6} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -282,11 +405,15 @@ function Page() {
       {/* Mobile cards */}
       <div className="mt-4 space-y-2 md:hidden">
         {leads === null && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        {leads && filtered.map((l) => {
+        {leads && pageLeads.map((l) => {
           const s = statuses.find((x) => x.id === l.status_id);
+          const isSel = selected.has(l.id);
           return (
-            <Card key={l.id} onClick={() => setActive(l)} className="p-3 shadow-card active:scale-[0.99] transition">
+            <Card key={l.id} onClick={() => setActive(l)} className={"p-3 shadow-card active:scale-[0.99] transition " + (isSel ? "ring-1 ring-primary bg-primary/5" : "")}>
               <div className="flex justify-between items-start gap-2">
+                <div onClick={(e) => { e.stopPropagation(); toggleSelect(l.id); }} className="pt-0.5">
+                  <Checkbox checked={isSel} onCheckedChange={() => toggleSelect(l.id)} aria-label="Select lead" />
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold truncate">{l.client_name}</p>
                   {l.phone && <p className="text-xs text-muted-foreground truncate">{l.phone}</p>}
@@ -308,6 +435,24 @@ function Page() {
           <Card className="p-8 text-center text-sm text-muted-foreground">No leads match your filters.</Card>
         )}
       </div>
+
+      {/* Pagination */}
+      {filtered.length > PAGE_SIZE && (
+        <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-xs text-muted-foreground">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <ChevronLeft className="size-4" /> Prev
+            </Button>
+            <span className="text-xs px-2">Page {page} / {pageCount}</span>
+            <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
+              Next <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <LeadDetailSheet lead={active} statuses={statuses} labels={labels} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Search, Filter, X, Save, RotateCcw, CalendarIcon, ChevronDown, Bookmark, Activity } from "lucide-react";
+import { Search, X, RotateCcw, CalendarIcon, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { StatusRow, LabelRow } from "@/components/leads/lead-detail-sheet";
@@ -71,14 +70,6 @@ function activeCount(f: LeadFilters): number {
   return n;
 }
 
-const PRESETS_KEY = "leads.filter.presets.v1";
-type Preset = { name: string; filters: LeadFilters };
-
-function loadPresets(): Preset[] {
-  try { return JSON.parse(localStorage.getItem(PRESETS_KEY) ?? "[]"); } catch { return []; }
-}
-function savePresets(p: Preset[]) { localStorage.setItem(PRESETS_KEY, JSON.stringify(p)); }
-
 export function LeadsFilterBar({
   filters, onChange, statuses, labels, profiles, teams,
 }: {
@@ -89,9 +80,7 @@ export function LeadsFilterBar({
   profiles: ProfileLite[];
   teams: { id: string; name: string }[];
 }) {
-  const [presets, setPresets] = useState<Preset[]>([]);
-  const [presetName, setPresetName] = useState("");
-  useEffect(() => { setPresets(loadPresets()); }, []);
+  void profiles; void teams;
   const count = useMemo(() => activeCount(filters), [filters]);
 
   function set<K extends keyof LeadFilters>(k: K, v: LeadFilters[K]) { onChange({ ...filters, [k]: v }); }
@@ -136,98 +125,7 @@ export function LeadsFilterBar({
           onClear={() => set("sources", [])}
         />
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1">
-              <Filter className="size-4" /> More
-              {count > 3 && <Badge className="ml-1 h-5 px-1.5">{count}</Badge>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[min(92vw,640px)] p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Name"><Input value={filters.name} onChange={(e) => set("name", e.target.value)} placeholder="Client name…" /></Field>
-              <Field label="Phone"><Input value={filters.phone} onChange={(e) => set("phone", e.target.value)} placeholder="Phone…" /></Field>
-              <Field label="Assigned User">
-                <UserSelect value={filters.assignedTo} onChange={(v) => set("assignedTo", v)} profiles={profiles} />
-              </Field>
-              <Field label="Assigned By (Creator)">
-                <UserSelect value={filters.createdBy} onChange={(v) => set("createdBy", v)} profiles={profiles} />
-              </Field>
-              <Field label="Team">
-                <Select value={filters.teamId} onValueChange={(v) => set("teamId", v)}>
-                  <SelectTrigger><SelectValue placeholder="Any team" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">Any team</SelectItem>
-                    {teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Sales Value (₹)">
-                <div className="flex gap-2">
-                  <Input type="number" placeholder="Min" value={filters.salesMin} onChange={(e) => set("salesMin", e.target.value)} />
-                  <Input type="number" placeholder="Max" value={filters.salesMax} onChange={(e) => set("salesMax", e.target.value)} />
-                </div>
-              </Field>
-              <Field label="Created Date Range">
-                <DateRange from={filters.dateFrom} to={filters.dateTo}
-                  onFrom={(d) => set("dateFrom", d)} onTo={(d) => set("dateTo", d)} />
-              </Field>
-              <Field label="Follow-up Date Range">
-                <DateRange from={filters.followFrom} to={filters.followTo}
-                  onFrom={(d) => set("followFrom", d)} onTo={(d) => set("followTo", d)} />
-              </Field>
-            </div>
-
-            <Separator />
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-sm font-medium">
-                <Activity className="size-4 text-primary" /> Status Movement Tracking
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="From Status">
-                  <StatusSelect value={filters.moveFrom} onChange={(v) => set("moveFrom", v)} statuses={statuses} />
-                </Field>
-                <Field label="To Status">
-                  <StatusSelect value={filters.moveTo} onChange={(v) => set("moveTo", v)} statuses={statuses} />
-                </Field>
-                <Field label="Changed By">
-                  <UserSelect value={filters.moveBy} onChange={(v) => set("moveBy", v)} profiles={profiles} />
-                </Field>
-                <Field label="Moved Between">
-                  <DateRange from={filters.moveDateFrom} to={filters.moveDateTo}
-                    onFrom={(d) => set("moveDateFrom", d)} onTo={(d) => set("moveDateTo", d)} />
-                </Field>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1"><Bookmark className="size-4" /> Presets</Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 p-3 space-y-3">
-            <div className="flex gap-2">
-              <Input placeholder="Preset name" value={presetName} onChange={(e) => setPresetName(e.target.value)} className="h-8" />
-              <Button size="sm" variant="outline" className="h-8" onClick={() => {
-                if (!presetName.trim()) return;
-                const next = [...presets.filter((p) => p.name !== presetName), { name: presetName, filters }];
-                setPresets(next); savePresets(next); setPresetName("");
-              }}><Save className="size-4" /></Button>
-            </div>
-            <div className="space-y-1 max-h-64 overflow-auto">
-              {presets.length === 0 && <p className="text-xs text-muted-foreground">No saved presets yet.</p>}
-              {presets.map((p) => (
-                <div key={p.name} className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" className="flex-1 justify-start h-8" onClick={() => onChange(p.filters)}>{p.name}</Button>
-                  <Button variant="ghost" size="icon" className="size-7" onClick={() => {
-                    const next = presets.filter((x) => x.name !== p.name); setPresets(next); savePresets(next);
-                  }}><X className="size-3.5" /></Button>
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+        <DateFilter filters={filters} onChange={onChange} />
 
         <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)} disabled={count === 0} className="gap-1">
           <RotateCcw className="size-4" /> Reset
@@ -245,33 +143,93 @@ export function LeadsFilterBar({
             return l && <Chip key={id} color={l.color} onClear={() => toggleArr("labelIds", id)}>Label: {l.name}</Chip>;
           })}
           {filters.sources.map((s) => <Chip key={s} onClear={() => toggleArr("sources", s)}>Source: {s}</Chip>)}
-          {filters.assignedTo !== "any" && <Chip onClear={() => set("assignedTo", "any")}>Assigned: {nameOf(profiles, filters.assignedTo)}</Chip>}
-          {filters.createdBy !== "any" && <Chip onClear={() => set("createdBy", "any")}>Created by: {nameOf(profiles, filters.createdBy)}</Chip>}
           {(filters.dateFrom || filters.dateTo) && <Chip onClear={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
-            Created: {fmt(filters.dateFrom)}–{fmt(filters.dateTo)}
+            Date: {fmt(filters.dateFrom)}–{fmt(filters.dateTo)}
           </Chip>}
-          {(filters.salesMin || filters.salesMax) && <Chip onClear={() => onChange({ ...filters, salesMin: "", salesMax: "" })}>
-            ₹ {filters.salesMin || "0"}–{filters.salesMax || "∞"}
-          </Chip>}
-          {(filters.moveFrom !== "any" || filters.moveTo !== "any" || filters.moveBy !== "any" || filters.moveDateFrom || filters.moveDateTo) && (
-            <Chip onClear={() => onChange({ ...filters, moveFrom: "any", moveTo: "any", moveBy: "any", moveDateFrom: undefined, moveDateTo: undefined })}>
-              Movement: {statuses.find((s) => s.id === filters.moveFrom)?.name ?? "Any"} → {statuses.find((s) => s.id === filters.moveTo)?.name ?? "Any"}
-            </Chip>
-          )}
         </div>
       )}
     </Card>
   );
 }
 
-function nameOf(profiles: ProfileLite[], id: string) {
-  const p = profiles.find((x) => x.id === id);
-  return p?.full_name || p?.email || "—";
-}
 function fmt(d?: Date) { return d ? format(d, "dd MMM") : "…"; }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function endOfDay(d: Date) { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; }
+
+function DateFilter({ filters, onChange }: { filters: LeadFilters; onChange: (f: LeadFilters) => void }) {
+  const active = !!(filters.dateFrom || filters.dateTo);
+
+  function applyPreset(preset: string) {
+    const now = new Date();
+    let from: Date | undefined; let to: Date | undefined;
+    if (preset === "today") { from = startOfDay(now); to = endOfDay(now); }
+    else if (preset === "yesterday") {
+      const y = new Date(now); y.setDate(now.getDate() - 1);
+      from = startOfDay(y); to = endOfDay(y);
+    }
+    else if (preset === "7d") {
+      const f = new Date(now); f.setDate(now.getDate() - 6);
+      from = startOfDay(f); to = endOfDay(now);
+    }
+    else if (preset === "30d") {
+      const f = new Date(now); f.setDate(now.getDate() - 29);
+      from = startOfDay(f); to = endOfDay(now);
+    }
+    else if (preset === "thisMonth") {
+      from = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+      to = endOfDay(now);
+    }
+    else if (preset === "lastMonth") {
+      from = startOfDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+      to = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
+    }
+    onChange({ ...filters, dateFrom: from, dateTo: to });
+  }
+
+  const presetList: { key: string; label: string }[] = [
+    { key: "today", label: "Today" },
+    { key: "yesterday", label: "Yesterday" },
+    { key: "7d", label: "Last 7 days" },
+    { key: "30d", label: "Last 30 days" },
+    { key: "thisMonth", label: "This month" },
+    { key: "lastMonth", label: "Last month" },
+  ];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1">
+          <CalendarIcon className="size-4" /> Date
+          {active && <Badge className="ml-1 h-5 px-1.5">1</Badge>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(92vw,460px)] p-3 space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+          {presetList.map((p) => (
+            <Button key={p.key} variant="outline" size="sm" className="h-8 justify-start" onClick={() => applyPreset(p.key)}>
+              {p.label}
+            </Button>
+          ))}
+        </div>
+        <Field label="Custom range">
+          <DateRange from={filters.dateFrom} to={filters.dateTo}
+            onFrom={(d) => onChange({ ...filters, dateFrom: d })}
+            onTo={(d) => onChange({ ...filters, dateTo: d })} />
+        </Field>
+        {active && (
+          <Button variant="ghost" size="sm" className="w-full"
+            onClick={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
+            Clear date
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function Chip({ children, color, onClear }: { children: React.ReactNode; color?: string; onClear: () => void }) {
