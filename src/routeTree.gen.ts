@@ -21,6 +21,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicWebhookDoubletickRouteImport } from './routes/api/public/webhook.doubletick'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -81,6 +82,12 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicWebhookDoubletickRoute =
+  ApiPublicWebhookDoubletickRouteImport.update({
+    id: '/api/public/webhook/doubletick',
+    path: '/api/public/webhook/doubletick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -107,6 +115,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -122,6 +131,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/users'
     | '/workflow'
+    | '/api/public/webhook/doubletick'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/users'
     | '/workflow'
+    | '/api/public/webhook/doubletick'
   id:
     | '__root__'
     | '/'
@@ -164,6 +176,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/users'
     | '/_authenticated/workflow'
+    | '/api/public/webhook/doubletick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -173,6 +186,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiPublicWebhookDoubletickRoute: typeof ApiPublicWebhookDoubletickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -261,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/webhook/doubletick': {
+      id: '/api/public/webhook/doubletick'
+      path: '/api/public/webhook/doubletick'
+      fullPath: '/api/public/webhook/doubletick'
+      preLoaderRoute: typeof ApiPublicWebhookDoubletickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -293,7 +314,18 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiPublicWebhookDoubletickRoute: ApiPublicWebhookDoubletickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
