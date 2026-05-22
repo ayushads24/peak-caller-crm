@@ -60,7 +60,7 @@ function Page() {
       supabase.from("lead_labels").select("lead_id, label_id"),
       supabase.from("tasks").select("lead_id, due_date, status").eq("status", "pending").not("due_date", "is", null),
       supabase.from("activities").select("lead_id, created_by, created_at, metadata").eq("type", "status_changed").order("created_at", { ascending: false }).limit(2000),
-      supabase.from("user_roles").select("user_id, role").eq("role", "admin"),
+      supabase.from("user_roles").select("user_id, role").in("role", ["admin", "team_leader", "manager"]),
     ]);
     setLeads((l.data ?? []) as LeadRow[]);
     setStatuses((s.data ?? []) as StatusRow[]);
