@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
@@ -231,6 +231,26 @@ function Page() {
     if (error) toast.error(error.message); else toast.success("Status updated");
   }
 
+  async function deleteLead(id: string) {
+    if (!confirm("Delete this lead permanently?")) return;
+    const { error } = await supabase.from("leads").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Lead deleted");
+    setSelected((s) => { const ns = new Set(s); ns.delete(id); return ns; });
+    load();
+  }
+
+  async function bulkDelete() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} leads permanently?`)) return;
+    const { error } = await supabase.from("leads").delete().in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`Deleted ${ids.length} leads`);
+    clearSelection();
+    load();
+  }
+
   function exportCsv() {
     const rows = filtered.map((l) => ({
       client_name: l.client_name, email: l.email ?? "", phone: l.phone ?? "",
@@ -343,6 +363,10 @@ function Page() {
             <Download className="size-3.5" /> Export selected
           </Button>
 
+          <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" onClick={bulkDelete}>
+            <Trash2 className="size-3.5" /> Delete selected
+          </Button>
+
           <Button size="sm" variant="ghost" className="ml-auto gap-1" onClick={clearSelection}>
             <X className="size-3.5" /> Clear
           </Button>
@@ -366,11 +390,12 @@ function Page() {
               <th className="text-left p-3 font-medium">Status</th>
               <th className="text-left p-3 font-medium">Value</th>
               <th className="text-left p-3 font-medium">Created</th>
+              <th className="p-3 w-10"></th>
             </tr>
           </thead>
           <tbody>
             {leads === null && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-t"><td colSpan={6} className="p-3"><Skeleton className="h-6" /></td></tr>
+              <tr key={i} className="border-t"><td colSpan={7} className="p-3"><Skeleton className="h-6" /></td></tr>
             ))}
             {leads && pageLeads.map((l) => {
               const s = statuses.find((x) => x.id === l.status_id);
@@ -392,11 +417,16 @@ function Page() {
                   </td>
                   <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
+                  <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                    <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </td>
                 </tr>
               );
             })}
             {leads && filtered.length === 0 && (
-              <tr><td colSpan={6} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
+              <tr><td colSpan={7} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -426,6 +456,9 @@ function Page() {
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {l.phone && <Button asChild size="icon" variant="outline" className="size-8"><a href={`tel:${l.phone}`}><Phone className="size-3.5" /></a></Button>}
                   {l.email && <Button asChild size="icon" variant="outline" className="size-8"><a href={`mailto:${l.email}`}><Mail className="size-3.5" /></a></Button>}
+                  <Button size="icon" variant="outline" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
               </div>
             </Card>
