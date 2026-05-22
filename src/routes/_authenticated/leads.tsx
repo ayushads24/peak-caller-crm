@@ -226,6 +226,11 @@ function Page() {
     URL.revokeObjectURL(url);
   }
 
+  async function quickStatus(id: string, status_id: string) {
+    const { error } = await supabase.from("leads").update({ status_id }).eq("id", id);
+    if (error) toast.error(error.message); else toast.success("Status updated");
+  }
+
   async function deleteLead(id: string) {
     if (!confirm("Delete this lead permanently?")) return;
     const { error } = await supabase.from("leads").delete().eq("id", id);
