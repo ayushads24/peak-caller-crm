@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Phone, DollarSign, Trash2, Plus, Check, MessageSquare, ListTodo, Activity as ActivityIcon } from "lucide-react";
+import { Mail, Phone, Trash2, Plus, Check, MessageSquare, ListTodo, Activity as ActivityIcon, X, Tag } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -25,10 +25,12 @@ export interface LeadRow {
 }
 
 export interface StatusRow { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean; }
+export interface LabelRow { id: string; name: string; color: string; }
 
-export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged }: {
+export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, onChanged }: {
   lead: LeadRow | null;
   statuses: StatusRow[];
+  labels: LabelRow[];
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onChanged: () => void;
@@ -37,6 +39,7 @@ export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged 
   const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
   const [tasks, setTasks] = useState<{ id: string; title: string; status: string; due_date: string | null }[]>([]);
   const [activities, setActivities] = useState<{ id: string; description: string; created_at: string; type: string }[]>([]);
+  const [leadLabelIds, setLeadLabelIds] = useState<string[]>([]);
   const [noteText, setNoteText] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
@@ -45,14 +48,16 @@ export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged 
   useEffect(() => { setEdit(lead); if (lead) void loadRelated(lead.id); }, [lead]);
 
   async function loadRelated(id: string) {
-    const [n, t, a] = await Promise.all([
+    const [n, t, a, ll] = await Promise.all([
       supabase.from("notes").select("id, content, created_at").eq("lead_id", id).order("created_at", { ascending: false }),
       supabase.from("tasks").select("id, title, status, due_date").eq("lead_id", id).order("created_at", { ascending: false }),
       supabase.from("activities").select("id, description, created_at, type").eq("lead_id", id).order("created_at", { ascending: false }),
+      supabase.from("lead_labels").select("label_id").eq("lead_id", id),
     ]);
     setNotes(n.data ?? []);
     setTasks((t.data ?? []) as typeof tasks);
     setActivities((a.data ?? []) as typeof activities);
+    setLeadLabelIds((ll.data ?? []).map((r: { label_id: string }) => r.label_id));
   }
 
   if (!lead || !edit) return null;
@@ -110,7 +115,24 @@ export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged 
     onChanged();
   }
 
+  async function addLabel(labelId: string) {
+    if (!labelId || leadLabelIds.includes(labelId)) return;
+    const { error } = await supabase.from("lead_labels").insert({ lead_id: lead!.id, label_id: labelId });
+    if (error) return toast.error(error.message);
+    setLeadLabelIds((ids) => [...ids, labelId]);
+    onChanged();
+  }
+
+  async function removeLabel(labelId: string) {
+    const { error } = await supabase.from("lead_labels").delete().eq("lead_id", lead!.id).eq("label_id", labelId);
+    if (error) return toast.error(error.message);
+    setLeadLabelIds((ids) => ids.filter((i) => i !== labelId));
+    onChanged();
+  }
+
   const status = statuses.find((s) => s.id === edit.status_id);
+  const assignedLabels = labels.filter((l) => leadLabelIds.includes(l.id));
+  const availableLabels = labels.filter((l) => !leadLabelIds.includes(l.id));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -122,7 +144,52 @@ export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged 
           </SheetTitle>
         </SheetHeader>
         <div className="px-5 pb-5">
-          <div className="grid grid-cols-2 gap-2 mt-4">
+          {/* Lead details first */}
+          <div className="space-y-3 mt-4">
+            <Field label="Name"><Input value={edit.client_name} onChange={(e) => setEdit({ ...edit, client_name: e.target.value })} /></Field>
+            <Field label="Email"><Input value={edit.email ?? ""} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></Field>
+            <Field label="Phone"><Input value={edit.phone ?? ""} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+            <Field label="Sales value"><Input type="number" value={edit.sales_value ?? ""} onChange={(e) => setEdit({ ...edit, sales_value: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
+            <Field label="Source"><Input value={edit.lead_source ?? ""} onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })} /></Field>
+            <Field label="Status">
+              <Select value={edit.status_id ?? ""} onValueChange={(v) => setEdit({ ...edit, status_id: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="inline-flex items-center gap-2"><span className="size-2 rounded-full" style={{ background: s.color }} />{s.name}</span>
+                  </SelectItem>
+                ))}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="Labels">
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {assignedLabels.map((l) => (
+                  <Badge key={l.id} style={{ background: l.color, color: "white" }} className="border-0 gap-1 pr-1">
+                    {l.name}
+                    <button onClick={() => removeLabel(l.id)} className="hover:bg-black/20 rounded-sm p-0.5"><X className="size-3" /></button>
+                  </Badge>
+                ))}
+                {assignedLabels.length === 0 && <span className="text-xs text-muted-foreground">No labels</span>}
+                {availableLabels.length > 0 && (
+                  <Select value="" onValueChange={addLabel}>
+                    <SelectTrigger className="h-7 w-auto gap-1 border-dashed px-2 text-xs"><Tag className="size-3" />Add</SelectTrigger>
+                    <SelectContent>{availableLabels.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        <span className="inline-flex items-center gap-2"><span className="size-2 rounded-full" style={{ background: l.color }} />{l.name}</span>
+                      </SelectItem>
+                    ))}</SelectContent>
+                  </Select>
+                )}
+              </div>
+            </Field>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={save} className="flex-1 bg-gradient-primary"><Check className="size-4 mr-1" />Save changes</Button>
+              <Button variant="outline" size="icon" onClick={deleteLead} className="text-destructive hover:text-destructive"><Trash2 className="size-4" /></Button>
+            </div>
+          </div>
+
+          {/* Quick actions + tabs BELOW the details */}
+          <div className="grid grid-cols-2 gap-2 mt-6">
             {edit.phone && (
               <Button asChild variant="outline" size="sm" className="justify-start"><a href={`tel:${edit.phone}`}><Phone className="size-3.5 mr-2" />Call</a></Button>
             )}
@@ -131,35 +198,12 @@ export function LeadDetailSheet({ lead, statuses, open, onOpenChange, onChanged 
             )}
           </div>
 
-          <Tabs defaultValue="details" className="mt-5">
-            <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="notes"><MessageSquare className="size-3.5 mr-1" />{notes.length}</TabsTrigger>
-              <TabsTrigger value="tasks"><ListTodo className="size-3.5 mr-1" />{tasks.length}</TabsTrigger>
-              <TabsTrigger value="activity"><ActivityIcon className="size-3.5" /></TabsTrigger>
+          <Tabs defaultValue="notes" className="mt-4">
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="notes"><MessageSquare className="size-3.5 mr-1" />Notes {notes.length}</TabsTrigger>
+              <TabsTrigger value="tasks"><ListTodo className="size-3.5 mr-1" />Tasks {tasks.length}</TabsTrigger>
+              <TabsTrigger value="activity"><ActivityIcon className="size-3.5 mr-1" />Activity</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="details" className="space-y-3 mt-4">
-              <Field label="Name"><Input value={edit.client_name} onChange={(e) => setEdit({ ...edit, client_name: e.target.value })} /></Field>
-              <Field label="Email"><Input value={edit.email ?? ""} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></Field>
-              <Field label="Phone"><Input value={edit.phone ?? ""} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
-              <Field label="Sales value"><Input type="number" value={edit.sales_value ?? ""} onChange={(e) => setEdit({ ...edit, sales_value: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-              <Field label="Source"><Input value={edit.lead_source ?? ""} onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })} /></Field>
-              <Field label="Status">
-                <Select value={edit.status_id ?? ""} onValueChange={(v) => setEdit({ ...edit, status_id: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{statuses.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      <span className="inline-flex items-center gap-2"><span className="size-2 rounded-full" style={{ background: s.color }} />{s.name}</span>
-                    </SelectItem>
-                  ))}</SelectContent>
-                </Select>
-              </Field>
-              <div className="flex gap-2 pt-2">
-                <Button onClick={save} className="flex-1 bg-gradient-primary"><Check className="size-4 mr-1" />Save changes</Button>
-                <Button variant="outline" size="icon" onClick={deleteLead} className="text-destructive hover:text-destructive"><Trash2 className="size-4" /></Button>
-              </div>
-            </TabsContent>
 
             <TabsContent value="notes" className="space-y-3 mt-4">
               <div className="flex gap-2">
