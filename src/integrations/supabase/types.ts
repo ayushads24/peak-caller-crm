@@ -216,6 +216,42 @@ export type Database = {
         }
         Relationships: []
       }
+      import_batches: {
+        Row: {
+          created_at: string
+          duplicate_count: number
+          error_count: number
+          errors: Json | null
+          filename: string
+          id: string
+          inserted_count: number
+          total_rows: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duplicate_count?: number
+          error_count?: number
+          errors?: Json | null
+          filename: string
+          id?: string
+          inserted_count?: number
+          total_rows?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duplicate_count?: number
+          error_count?: number
+          errors?: Json | null
+          filename?: string
+          id?: string
+          inserted_count?: number
+          total_rows?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       labels: {
         Row: {
           color: string
