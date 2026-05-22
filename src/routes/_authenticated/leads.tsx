@@ -390,11 +390,12 @@ function Page() {
               <th className="text-left p-3 font-medium">Status</th>
               <th className="text-left p-3 font-medium">Value</th>
               <th className="text-left p-3 font-medium">Created</th>
+              <th className="p-3 w-10"></th>
             </tr>
           </thead>
           <tbody>
             {leads === null && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-t"><td colSpan={6} className="p-3"><Skeleton className="h-6" /></td></tr>
+              <tr key={i} className="border-t"><td colSpan={7} className="p-3"><Skeleton className="h-6" /></td></tr>
             ))}
             {leads && pageLeads.map((l) => {
               const s = statuses.find((x) => x.id === l.status_id);
@@ -416,6 +417,11 @@ function Page() {
                   </td>
                   <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
+                  <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                    <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </td>
                 </tr>
               );
             })}
