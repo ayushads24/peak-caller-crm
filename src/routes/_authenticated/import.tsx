@@ -115,7 +115,7 @@ function ImportPage() {
       supabase.from("import_batches").select("*").order("created_at", { ascending: false }).limit(10),
     ]);
     setStatuses((s.data ?? []) as { id: string; name: string }[]);
-    setExistingPhones(new Set((l.data ?? []).map((r: { phone: string }) => normalizePhone(r.phone)).filter(Boolean)));
+      setExistingPhones(new Set((l.data ?? []).map((r: { phone: string | null }) => normalizePhone(r.phone)).filter(Boolean)));
     setHistory((h.data ?? []) as BatchLog[]);
   }
 
@@ -189,8 +189,19 @@ function ImportPage() {
     setImporting(true);
     const statusMap = new Map(statuses.map((s) => [s.name.toLowerCase(), s.id]));
     const seen = new Set<string>();
+    type LeadInsert = {
+      client_name: string;
+      phone: string;
+      email: string | null;
+      lead_source: string | null;
+      sales_value: number | null;
+      status_id: string | null;
+      created_by: string;
+      created_at?: string;
+      updated_at?: string;
+    };
     const toInsert: Array<{
-      payload: Record<string, unknown>;
+      payload: LeadInsert;
       notes?: string;
       followUp?: Date;
     }> = [];
@@ -209,12 +220,12 @@ function ImportPage() {
       const sales = salesRaw === "" || salesRaw == null ? null : Number(String(salesRaw).replace(/[^0-9.-]/g, ""));
       const statusName = String(r.status ?? "").trim().toLowerCase();
       const status_id = statusName ? statusMap.get(statusName) ?? null : null;
-      const payload: Record<string, unknown> = {
+      const payload: LeadInsert = {
         client_name: name,
         phone: String(r.phone).trim(),
         email: r.email ? String(r.email).trim() : null,
         lead_source: r.lead_source ? String(r.lead_source).trim() : null,
-        sales_value: Number.isFinite(sales) ? sales : null,
+        sales_value: sales != null && Number.isFinite(sales) ? sales : null,
         status_id,
         created_by: user.id,
       };
