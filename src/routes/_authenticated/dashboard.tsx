@@ -1,160 +1,298 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Flame, Clock, Trophy, TrendingUp, Activity as ActivityIcon } from "lucide-react";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { formatDistanceToNow, subDays, startOfDay, format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Users, PhoneCall, TrendingUp, CalendarCheck, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2 } from "lucide-react";
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({ component: Page });
 
-interface Stats {
-  total: number;
-  fresh: number;
-  pending: number;
-  closed: number;
-  pipelineValue: number;
-}
-
-interface Activity {
-  id: string;
-  type: string;
-  description: string;
-  created_at: string;
-  lead_id: string;
-}
+interface StatusRow { id: string; name: string; color: string; is_sales: boolean; sort_order: number; }
+interface LeadLite { id: string; client_name: string; status_id: string | null; sales_value: number | null; created_at: string; }
 
 function Page() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [trend, setTrend] = useState<{ date: string; leads: number }[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const today = new Date();
+  const [from, setFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
+  const [to, setTo] = useState<string>(format(endOfMonth(today), "yyyy-MM-dd"));
+
+  const [statuses, setStatuses] = useState<StatusRow[]>([]);
+  const [leads, setLeads] = useState<LeadLite[]>([]);
+  const [connectedLeadIds, setConnectedLeadIds] = useState<Set<string>>(new Set());
+  const [meetingsDone, setMeetingsDone] = useState(0);
+  const [callsToday, setCallsToday] = useState(0);
+  const [pendingTasks, setPendingTasks] = useState<{ id: string; title: string; due_date: string | null; lead_id: string }[]>([]);
+  const [punch, setPunch] = useState<{ id: string; punch_in_at: string; punch_out_at: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyPunch, setBusyPunch] = useState(false);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTitle, setDrawerTitle] = useState("");
+  const [drawerLeads, setDrawerLeads] = useState<LeadLite[]>([]);
+  const [tasksOpen, setTasksOpen] = useState(false);
+
+  const fromIso = useMemo(() => startOfDay(new Date(from)).toISOString(), [from]);
+  const toIso = useMemo(() => endOfDay(new Date(to)).toISOString(), [to]);
+
+  useEffect(() => { if (user) void load(); }, [user, fromIso, toIso]);
 
   useEffect(() => {
-    void load();
+    if (!user) return;
     const ch = supabase
-      .channel("dashboard-realtime")
+      .channel("dashboard-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activities" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "calls" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => loadPunch())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, []);
+  }, [user]);
 
-  async function load() {
-    const [{ data: leads }, { data: acts }, { data: statuses }] = await Promise.all([
-      supabase.from("leads").select("id, status_id, sales_value, created_at, closed_at"),
-      supabase.from("activities").select("id, type, description, created_at, lead_id").order("created_at", { ascending: false }).limit(8),
-      supabase.from("statuses").select("id, name, is_sales, is_lost"),
-    ]);
-    const salesIds = new Set((statuses ?? []).filter((s) => s.is_sales).map((s) => s.id));
-    const freshNames = new Set(["new", "fresh"]);
-    const freshIds = new Set((statuses ?? []).filter((s) => freshNames.has(s.name.toLowerCase())).map((s) => s.id));
-    const all = leads ?? [];
-    const closed = all.filter((l) => l.status_id && salesIds.has(l.status_id));
-    const stats: Stats = {
-      total: all.length,
-      fresh: all.filter((l) => l.status_id && freshIds.has(l.status_id)).length,
-      pending: all.filter((l) => !l.closed_at && !(l.status_id && salesIds.has(l.status_id))).length,
-      closed: closed.length,
-      pipelineValue: all.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0),
-    };
-    setStats(stats);
-    setActivities((acts ?? []) as Activity[]);
-
-    const buckets: Record<string, number> = {};
-    for (let i = 13; i >= 0; i--) {
-      const d = format(subDays(new Date(), i), "MMM d");
-      buckets[d] = 0;
-    }
-    for (const l of all) {
-      const key = format(startOfDay(new Date(l.created_at)), "MMM d");
-      if (key in buckets) buckets[key]++;
-    }
-    setTrend(Object.entries(buckets).map(([date, leads]) => ({ date, leads })));
+  async function loadPunch() {
+    if (!user) return;
+    const workDate = format(new Date(), "yyyy-MM-dd");
+    const { data } = await supabase.from("attendance").select("id, punch_in_at, punch_out_at").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
+    setPunch(data ?? null);
   }
 
-  const kpis = stats && [
-    { label: "Total Leads", value: stats.total, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
-    { label: "Fresh Leads", value: stats.fresh, icon: Flame, accent: "from-orange-500/20 to-orange-500/0" },
-    { label: "Follow-ups", value: stats.pending, icon: Clock, accent: "from-amber-500/20 to-amber-500/0" },
-    { label: "Sales Closed", value: stats.closed, icon: Trophy, accent: "from-emerald-500/20 to-emerald-500/0" },
+  async function load() {
+    if (!user) return;
+    setLoading(true);
+    const todayStart = startOfDay(new Date()).toISOString();
+    const todayEnd = endOfDay(new Date()).toISOString();
+    const [s, l, calls, callsTodayRes, m, t, _p] = await Promise.all([
+      supabase.from("statuses").select("id, name, color, is_sales, sort_order").order("sort_order"),
+      supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
+      supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
+      supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
+      supabase.from("meetings").select("id", { count: "exact", head: true }).eq("status", "completed").gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
+      supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50),
+      loadPunch(),
+    ]);
+    setStatuses((s.data ?? []) as StatusRow[]);
+    setLeads((l.data ?? []) as LeadLite[]);
+    setConnectedLeadIds(new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)));
+    setCallsToday(callsTodayRes.count ?? 0);
+    setMeetingsDone(m.count ?? 0);
+    setPendingTasks((t.data ?? []) as typeof pendingTasks);
+    setLoading(false);
+  }
+
+  const salesStatus = statuses.find((s) => s.is_sales);
+  const totalLeads = leads.length;
+  const connectedCount = connectedLeadIds.size;
+  const salesLeads = leads.filter((l) => salesStatus && l.status_id === salesStatus.id);
+  const totalSalesValue = salesLeads.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0);
+  const conversionRate = connectedCount > 0
+    ? Math.round(((salesLeads.length + meetingsDone) / connectedCount) * 100)
+    : 0;
+
+  const byStatus = useMemo(() => {
+    const map = new Map<string, LeadLite[]>();
+    for (const l of leads) {
+      if (!l.status_id) continue;
+      const arr = map.get(l.status_id) ?? [];
+      arr.push(l);
+      map.set(l.status_id, arr);
+    }
+    return map;
+  }, [leads]);
+
+  function openStatusLeads(s: StatusRow) {
+    setDrawerTitle(`${s.name} — ${(byStatus.get(s.id) ?? []).length} leads`);
+    setDrawerLeads(byStatus.get(s.id) ?? []);
+    setDrawerOpen(true);
+  }
+
+  async function punchIn() {
+    if (!user) return;
+    setBusyPunch(true);
+    const workDate = format(new Date(), "yyyy-MM-dd");
+    const { error } = await supabase.from("attendance").insert({ user_id: user.id, work_date: workDate });
+    setBusyPunch(false);
+    if (error) return toast.error(error.message);
+    toast.success("Punched in");
+    void loadPunch();
+  }
+
+  async function punchOut() {
+    if (!user || !punch) return;
+    setBusyPunch(true);
+    const { error } = await supabase.from("attendance").update({ punch_out_at: new Date().toISOString() }).eq("id", punch.id);
+    setBusyPunch(false);
+    if (error) return toast.error(error.message);
+    toast.success("Punched out");
+    void loadPunch();
+  }
+
+  const kpis = [
+    { label: "Total Leads", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+    { label: "Connected Leads", value: connectedCount, icon: PhoneCall, accent: "from-sky-500/20 to-sky-500/0" },
+    { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+    { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+    { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
   ];
+
+  function setRange(preset: "today" | "week" | "month" | "all") {
+    const now = new Date();
+    if (preset === "today") { setFrom(format(now, "yyyy-MM-dd")); setTo(format(now, "yyyy-MM-dd")); }
+    if (preset === "week") { const d = new Date(now); d.setDate(d.getDate() - 6); setFrom(format(d, "yyyy-MM-dd")); setTo(format(now, "yyyy-MM-dd")); }
+    if (preset === "month") { setFrom(format(startOfMonth(now), "yyyy-MM-dd")); setTo(format(endOfMonth(now), "yyyy-MM-dd")); }
+    if (preset === "all") { setFrom("2020-01-01"); setTo(format(now, "yyyy-MM-dd")); }
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Your sales pulse at a glance.</p>
+          <p className="text-muted-foreground mt-1 text-sm">{format(new Date(from), "MMM d, yyyy")} → {format(new Date(to), "MMM d, yyyy")}</p>
         </div>
-        {stats && (
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Pipeline value</div>
-            <div className="font-display text-2xl font-bold">₹{stats.pipelineValue.toLocaleString("en-IN")}</div>
+        <Card className="p-3 flex flex-wrap items-end gap-2 shadow-card">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-[140px]" />
           </div>
-        )}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-[140px]" />
+          </div>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("today")}>Today</Button>
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("week")}>7d</Button>
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("month")}>Month</Button>
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("all")}>All</Button>
+          </div>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
-        {kpis ? kpis.map((k) => (
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-6">
+        {loading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) : kpis.map((k) => (
           <Card key={k.label} className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card`}>
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground font-medium">{k.label}</div>
-                <div className="font-display text-2xl sm:text-3xl font-bold mt-2">{k.value}</div>
+                <div className="font-display text-xl sm:text-2xl font-bold mt-2 truncate">{k.value}</div>
               </div>
-              <div className="size-8 sm:size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <div className="size-8 sm:size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <k.icon className="size-4" />
               </div>
             </div>
           </Card>
-        )) : Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 rounded-xl" />
         ))}
       </div>
 
+      {/* Activity grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
-        <Card className="lg:col-span-2 p-4 sm:p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-display font-semibold flex items-center gap-2"><TrendingUp className="size-4 text-primary" /> Leads (last 14 days)</h2>
+        {/* Punch + Calls + Tasks */}
+        <div className="space-y-4">
+          <Card className="p-5 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display font-semibold flex items-center gap-2"><LogIn className="size-4 text-primary" />Punch-in</h3>
+              <span className="text-[10px] text-muted-foreground">{format(new Date(), "EEE, MMM d")}</span>
             </div>
-          </div>
-          <div className="h-56 sm:h-64 -ml-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend}>
-                <defs>
-                  <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} allowDecimals={false} width={30} />
-                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Area type="monotone" dataKey="leads" stroke="var(--primary)" strokeWidth={2} fill="url(#grad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="p-4 sm:p-6 shadow-card">
-          <h2 className="font-display font-semibold flex items-center gap-2 mb-4"><ActivityIcon className="size-4 text-primary" /> Recent activity</h2>
-          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-            {activities.length === 0 && <p className="text-xs text-muted-foreground">No activity yet.</p>}
-            {activities.map((a) => (
-              <div key={a.id} className="flex gap-3 text-sm">
-                <div className="size-2 mt-2 rounded-full bg-primary/60 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="truncate">{a.description}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</p>
-                </div>
+            {punch ? (
+              <div className="space-y-2">
+                <p className="text-sm">In at <span className="font-semibold">{format(new Date(punch.punch_in_at), "h:mm a")}</span></p>
+                {punch.punch_out_at
+                  ? <p className="text-sm text-muted-foreground">Out at {format(new Date(punch.punch_out_at), "h:mm a")}</p>
+                  : <Button onClick={punchOut} disabled={busyPunch} variant="outline" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>}
               </div>
-            ))}
+            ) : (
+              <Button onClick={punchIn} disabled={busyPunch} className="w-full bg-gradient-primary">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch in</Button>
+            )}
+          </Card>
+
+          <Card className="p-5 shadow-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-semibold flex items-center gap-2"><PhoneCall className="size-4 text-primary" />Calls today</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Your activity</p>
+              </div>
+              <div className="font-display text-3xl font-bold">{callsToday}</div>
+            </div>
+          </Card>
+
+          <button onClick={() => setTasksOpen(true)} className="w-full text-left">
+            <Card className="p-5 shadow-card hover:shadow-elegant transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display font-semibold flex items-center gap-2"><ListTodo className="size-4 text-primary" />Pending tasks</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Click to view</p>
+                </div>
+                <div className="font-display text-3xl font-bold flex items-center gap-1">{pendingTasks.length}<ChevronRight className="size-5 text-muted-foreground" /></div>
+              </div>
+            </Card>
+          </button>
+        </div>
+
+        {/* Status movement */}
+        <Card className="lg:col-span-2 p-5 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold">Status movement</h3>
+            <span className="text-xs text-muted-foreground">Click a status to view leads</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {statuses.map((s) => {
+              const count = (byStatus.get(s.id) ?? []).length;
+              return (
+                <button key={s.id} onClick={() => openStatusLeads(s)} className="group flex items-center justify-between rounded-lg border bg-card p-3 hover:border-primary/50 hover:shadow-sm transition-all text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="size-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                    <span className="text-sm font-medium truncate">{s.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-display text-lg font-bold">{count}</span>
+                    <ChevronRight className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                </button>
+              );
+            })}
+            {statuses.length === 0 && <p className="text-xs text-muted-foreground col-span-2 text-center py-6">No statuses configured.</p>}
           </div>
         </Card>
       </div>
+
+      {/* Status leads drawer */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader><SheetTitle className="font-display">{drawerTitle}</SheetTitle></SheetHeader>
+          <div className="mt-4 space-y-2">
+            {drawerLeads.length === 0 && <p className="text-sm text-muted-foreground">No leads in this status.</p>}
+            {drawerLeads.map((l) => (
+              <button key={l.id} onClick={() => { setDrawerOpen(false); navigate({ to: "/leads" }); }} className="w-full text-left rounded-lg border p-3 hover:border-primary/50 transition-colors">
+                <p className="font-medium text-sm">{l.client_name}</p>
+                <p className="text-[11px] text-muted-foreground">Created {formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}{l.sales_value ? ` · ₹${Number(l.sales_value).toLocaleString("en-IN")}` : ""}</p>
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Tasks drawer */}
+      <Sheet open={tasksOpen} onOpenChange={setTasksOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader><SheetTitle className="font-display">Pending tasks ({pendingTasks.length})</SheetTitle></SheetHeader>
+          <div className="mt-4 space-y-2">
+            {pendingTasks.length === 0 && <p className="text-sm text-muted-foreground">All caught up.</p>}
+            {pendingTasks.map((t) => (
+              <button key={t.id} onClick={() => { setTasksOpen(false); navigate({ to: "/leads" }); }} className="w-full text-left rounded-lg border p-3 hover:border-primary/50 transition-colors">
+                <p className="font-medium text-sm">{t.title}</p>
+                {t.due_date && <p className="text-[11px] text-muted-foreground">Due {format(new Date(t.due_date), "MMM d, h:mm a")}</p>}
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
