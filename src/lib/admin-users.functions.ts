@@ -160,12 +160,18 @@ export const adminListTeams = createServerFn({ method: "GET" })
     await assertAdmin(context.userId);
     const { data: teamLeaders, error: leaderError } = await supabaseAdmin
       .from("user_roles")
-      .select("user_id, profiles(full_name, email)")
+      .select("user_id")
       .eq("role", "team_leader");
     if (leaderError) throw new Error(leaderError.message);
-    await Promise.all((teamLeaders ?? []).map((row: { user_id: string; profiles?: { full_name: string | null; email: string | null } | null }) =>
-      ensureTeamForLeader(row.user_id, row.profiles?.full_name || row.profiles?.email),
-    ));
+    const leaderIds = (teamLeaders ?? []).map((row: { user_id: string }) => row.user_id);
+    const { data: leaderProfiles } = leaderIds.length > 0
+      ? await supabaseAdmin.from("profiles").select("id, full_name, email").in("id", leaderIds)
+      : { data: [] };
+    const leaderProfileMap = new Map((leaderProfiles ?? []).map((p) => [p.id, p]));
+    await Promise.all((teamLeaders ?? []).map((row: { user_id: string }) => {
+      const profile = leaderProfileMap.get(row.user_id);
+      return ensureTeamForLeader(row.user_id, profile?.full_name || profile?.email);
+    }));
 
     const { data: teams } = await supabaseAdmin
       .from("teams")
