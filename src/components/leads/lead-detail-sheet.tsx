@@ -149,7 +149,12 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
             <Field label="Name"><Input value={edit.client_name} onChange={(e) => setEdit({ ...edit, client_name: e.target.value })} /></Field>
             <Field label="Email"><Input value={edit.email ?? ""} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></Field>
             <Field label="Phone"><Input value={edit.phone ?? ""} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
-            <Field label="Sales value"><Input type="number" value={edit.sales_value ?? ""} onChange={(e) => setEdit({ ...edit, sales_value: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
+            <Field label="Sales value (₹)">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                <Input type="number" className="pl-7" value={edit.sales_value ?? ""} onChange={(e) => setEdit({ ...edit, sales_value: e.target.value === "" ? null : Number(e.target.value) })} />
+              </div>
+            </Field>
             <Field label="Source"><Input value={edit.lead_source ?? ""} onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })} /></Field>
             <Field label="Status">
               <Select value={edit.status_id ?? ""} onValueChange={(v) => setEdit({ ...edit, status_id: v })}>

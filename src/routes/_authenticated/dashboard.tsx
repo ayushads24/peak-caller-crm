@@ -90,7 +90,7 @@ function Page() {
         {stats && (
           <div className="text-right">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Pipeline value</div>
-            <div className="font-display text-2xl font-bold">${stats.pipelineValue.toLocaleString()}</div>
+            <div className="font-display text-2xl font-bold">₹{stats.pipelineValue.toLocaleString("en-IN")}</div>
           </div>
         )}
       </div>
