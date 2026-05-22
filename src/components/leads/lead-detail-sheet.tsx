@@ -22,6 +22,8 @@ export interface LeadRow {
   lead_source: string | null;
   status_id: string | null;
   created_at: string;
+  assigned_to?: string | null;
+  created_by?: string | null;
 }
 
 export interface StatusRow { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean; }
