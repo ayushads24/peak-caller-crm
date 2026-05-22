@@ -52,6 +52,66 @@ export type Database = {
           },
         ]
       }
+      attendance: {
+        Row: {
+          created_at: string
+          id: string
+          punch_in_at: string
+          punch_out_at: string | null
+          user_id: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          punch_in_at?: string
+          punch_out_at?: string | null
+          user_id: string
+          work_date?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          punch_in_at?: string
+          punch_out_at?: string | null
+          user_id?: string
+          work_date?: string
+        }
+        Relationships: []
+      }
+      calls: {
+        Row: {
+          called_at: string
+          created_at: string
+          duration_seconds: number
+          id: string
+          lead_id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["call_status"]
+          user_id: string
+        }
+        Insert: {
+          called_at?: string
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          lead_id: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["call_status"]
+          user_id: string
+        }
+        Update: {
+          called_at?: string
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          lead_id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["call_status"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       labels: {
         Row: {
           color: string
@@ -383,6 +443,12 @@ export type Database = {
         | "lead_updated"
         | "label_changed"
       app_role: "admin" | "manager" | "caller"
+      call_status:
+        | "connected"
+        | "not_connected"
+        | "voicemail"
+        | "busy"
+        | "wrong_number"
       meeting_status: "scheduled" | "completed" | "cancelled" | "rescheduled"
       task_status: "pending" | "in_progress" | "completed"
     }
@@ -526,6 +592,13 @@ export const Constants = {
         "label_changed",
       ],
       app_role: ["admin", "manager", "caller"],
+      call_status: [
+        "connected",
+        "not_connected",
+        "voicemail",
+        "busy",
+        "wrong_number",
+      ],
       meeting_status: ["scheduled", "completed", "cancelled", "rescheduled"],
       task_status: ["pending", "in_progress", "completed"],
     },
