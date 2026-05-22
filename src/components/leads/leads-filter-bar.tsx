@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, RotateCcw, CalendarIcon, ChevronDown } from "lucide-react";
+import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { StatusRow, LabelRow } from "@/components/leads/lead-detail-sheet";
@@ -127,6 +127,8 @@ export function LeadsFilterBar({
 
         <DateFilter filters={filters} onChange={onChange} />
 
+        <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
+
         <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)} disabled={count === 0} className="gap-1">
           <RotateCcw className="size-4" /> Reset
         </Button>
@@ -146,6 +148,12 @@ export function LeadsFilterBar({
           {(filters.dateFrom || filters.dateTo) && <Chip onClear={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
             Date: {fmt(filters.dateFrom)}–{fmt(filters.dateTo)}
           </Chip>}
+          {(filters.moveFrom !== "any" || filters.moveTo !== "any" || filters.moveDateFrom || filters.moveDateTo) && (
+            <Chip onClear={() => onChange({ ...filters, moveFrom: "any", moveTo: "any", moveDateFrom: undefined, moveDateTo: undefined })}>
+              Moved: {statuses.find((s) => s.id === filters.moveFrom)?.name ?? "Any"} → {statuses.find((s) => s.id === filters.moveTo)?.name ?? "Any"}
+              {(filters.moveDateFrom || filters.moveDateTo) && ` · ${fmt(filters.moveDateFrom)}–${fmt(filters.moveDateTo)}`}
+            </Chip>
+          )}
         </div>
       )}
     </Card>
@@ -156,6 +164,60 @@ function fmt(d?: Date) { return d ? format(d, "dd MMM") : "…"; }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+function MovementFilter({ filters, onChange, statuses }: { filters: LeadFilters; onChange: (f: LeadFilters) => void; statuses: StatusRow[] }) {
+  const active = filters.moveFrom !== "any" || filters.moveTo !== "any" || !!filters.moveDateFrom || !!filters.moveDateTo;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1">
+          <GitBranch className="size-4" /> Movement
+          {active && <Badge className="ml-1 h-5 px-1.5">1</Badge>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(92vw,460px)] p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium mb-1">Status transition</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Find leads that moved from one status to another (e.g. Quotation Sent → Lost).
+          </p>
+        </div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+          <Field label="From">
+            <Select value={filters.moveFrom} onValueChange={(v) => onChange({ ...filters, moveFrom: v })}>
+              <SelectTrigger><SelectValue placeholder="Any status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any status</SelectItem>
+                {statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <ArrowRight className="size-4 text-muted-foreground mb-3" />
+          <Field label="To">
+            <Select value={filters.moveTo} onValueChange={(v) => onChange({ ...filters, moveTo: v })}>
+              <SelectTrigger><SelectValue placeholder="Any status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any status</SelectItem>
+                {statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <Field label="Moved between (optional)">
+          <DateRange from={filters.moveDateFrom} to={filters.moveDateTo}
+            onFrom={(d) => onChange({ ...filters, moveDateFrom: d })}
+            onTo={(d) => onChange({ ...filters, moveDateTo: d })} />
+        </Field>
+        {active && (
+          <Button variant="ghost" size="sm" className="w-full"
+            onClick={() => onChange({ ...filters, moveFrom: "any", moveTo: "any", moveDateFrom: undefined, moveDateTo: undefined })}>
+            Clear movement filter
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
