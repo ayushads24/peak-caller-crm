@@ -206,6 +206,7 @@ function UserDialog({ children, teams, existing, onSaved }: {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState(existing?.full_name ?? "");
   const [phone, setPhone] = useState(existing?.phone ?? "");
+  const [designation, setDesignation] = useState(existing?.designation ?? "");
   const [role, setRole] = useState<Role>((existing?.roles[0] as Role) ?? "caller");
   const [teamId, setTeamId] = useState<string>(existing?.team_id ?? "__none__");
   const [saving, setSaving] = useState(false);
@@ -218,6 +219,7 @@ function UserDialog({ children, teams, existing, onSaved }: {
           id: existing.id,
           full_name: fullName,
           phone: phone || null,
+          designation: designation || null,
           role,
           team_id: teamId === "__none__" ? null : teamId,
           ...(password && { password }),
@@ -225,14 +227,14 @@ function UserDialog({ children, teams, existing, onSaved }: {
         toast.success("User updated");
       } else {
         await create({ data: {
-          email, password, full_name: fullName, phone: phone || null, role,
+          email, password, full_name: fullName, phone: phone || null, designation: designation || null, role,
           team_id: teamId === "__none__" ? null : teamId, is_active: true,
         }});
         toast.success("User created");
       }
       setOpen(false);
       onSaved();
-      if (!existing) { setEmail(""); setPassword(""); setFullName(""); setPhone(""); }
+      if (!existing) { setEmail(""); setPassword(""); setFullName(""); setPhone(""); setDesignation(""); }
     } catch (e) {
       toast.error((e as Error).message);
     } finally { setSaving(false); }
@@ -250,6 +252,7 @@ function UserDialog({ children, teams, existing, onSaved }: {
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
           </div>
           <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+          <div><Label>Designation</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Senior Caller" /></div>
           <div>
             <Label>Role</Label>
             <Select value={role} onValueChange={(v) => setRole(v as Role)}>
