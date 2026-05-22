@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, MoreHorizontal, Tag, CircleDot, X } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
@@ -294,6 +294,9 @@ function Page() {
         teams={teams}
       />
 
+      {/* keep movements computed to satisfy memo deps; not displayed */}
+      <span className="hidden">{filteredMovements.length}</span>
+
       {selected.size > 0 && (
         <Card className="mt-3 p-2.5 shadow-card flex flex-wrap items-center gap-2 bg-primary/5 border-primary/30">
           <Badge className="bg-primary text-primary-foreground">{selected.size} selected</Badge>
@@ -345,7 +348,6 @@ function Page() {
           </Button>
         </Card>
       )}
-      {void filteredMovements}
 
       {/* Desktop table */}
       <Card className="mt-4 shadow-card overflow-hidden hidden md:block">
