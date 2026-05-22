@@ -67,7 +67,23 @@ function Layout() {
       </aside>
       <main className="flex-1 overflow-x-hidden">
         <Outlet />
+        <div className="h-20 md:hidden" />
       </main>
+
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border flex items-center justify-around px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {navItems.map((item) => (
+          <Link key={item.to} to={item.to} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground rounded-lg"
+            activeProps={{ className: "flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-primary rounded-lg" }}>
+            <item.icon className="size-5" />
+            {item.label}
+          </Link>
+        ))}
+        <button onClick={logout} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground">
+          <LogOut className="size-5" />
+          Sign out
+        </button>
+      </nav>
     </div>
   );
 }
