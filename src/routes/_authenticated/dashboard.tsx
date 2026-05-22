@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { CreateFlowModal } from "@/components/calling/create-flow-modal";
+import { CreateFlowModal } from "@/components/workflow/create-flow-modal";
 import { Users, PhoneCall, TrendingUp, CalendarCheck, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
