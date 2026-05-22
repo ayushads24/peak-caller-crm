@@ -1,15 +1,15 @@
 import { createFileRoute, Outlet, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, isAdmin } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
 
 function Layout() {
-  const { user, loading } = useAuth();
+  const { user, loading, roles } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,6 +34,7 @@ function Layout() {
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/workflow", icon: Phone, label: "Workflow" },
     { to: "/leads", icon: Users, label: "Leads" },
+    ...(isAdmin(roles) ? [{ to: "/users", icon: UserCog, label: "Users" } as const] : []),
     { to: "/settings", icon: Settings, label: "Settings" },
   ] as const;
 
