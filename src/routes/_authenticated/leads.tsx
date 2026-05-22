@@ -363,6 +363,10 @@ function Page() {
             <Download className="size-3.5" /> Export selected
           </Button>
 
+          <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" onClick={bulkDelete}>
+            <Trash2 className="size-3.5" /> Delete selected
+          </Button>
+
           <Button size="sm" variant="ghost" className="ml-auto gap-1" onClick={clearSelection}>
             <X className="size-3.5" /> Clear
           </Button>
