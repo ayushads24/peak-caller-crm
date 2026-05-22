@@ -76,10 +76,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "PulseCRM — Sales CRM for high-performance teams" },
+      { title: "Call to Grow — Sales CRM for high-performance teams" },
       { name: "description", content: "Manage leads, track calls, run your sales pipeline with a modern, fast CRM." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "PulseCRM" },
+      { property: "og:title", content: "Call to Grow" },
       { property: "og:description", content: "Modern sales CRM for high-performance teams." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

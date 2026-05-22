@@ -45,7 +45,7 @@ function LoginPage() {
           <div className="size-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-glow">
             <Zap className="size-5 text-white" />
           </div>
-          PulseCRM
+          Call to Grow
         </div>
         <div className="relative space-y-4">
           <h1 className="font-display text-4xl font-bold leading-tight">The sales CRM built for speed.</h1>
@@ -58,7 +58,7 @@ function LoginPage() {
             <div className="size-9 rounded-xl bg-gradient-primary flex items-center justify-center">
               <Zap className="size-5 text-white" />
             </div>
-            PulseCRM
+            Call to Grow
           </div>
           <h2 className="font-display text-2xl font-semibold">Sign in</h2>
           <p className="text-sm text-muted-foreground mt-1">Welcome back. Let's close some deals.</p>
