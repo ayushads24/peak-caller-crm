@@ -7,7 +7,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Users, PhoneCall, TrendingUp, CalendarCheck, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { CreateFlowModal } from "@/components/calling/create-flow-modal";
+import { Users, PhoneCall, TrendingUp, CalendarCheck, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -37,6 +39,8 @@ function Page() {
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerLeads, setDrawerLeads] = useState<LeadLite[]>([]);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [createFlowOpen, setCreateFlowOpen] = useState(false);
+  const [punchOutGuard, setPunchOutGuard] = useState<{ pending: number } | null>(null);
 
   const fromIso = useMemo(() => startOfDay(new Date(from)).toISOString(), [from]);
   const toIso = useMemo(() => endOfDay(new Date(to)).toISOString(), [to]);
@@ -125,12 +129,41 @@ function Page() {
 
   async function punchOut() {
     if (!user || !punch) return;
+    // Check pending calling flow items
+    const workDate = format(new Date(), "yyyy-MM-dd");
+    const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
+    if (flow) {
+      const { count } = await supabase.from("calling_flow_items").select("id", { count: "exact", head: true }).eq("flow_id", flow.id).in("status", ["pending", "in_progress"]);
+      if ((count ?? 0) > 0) { setPunchOutGuard({ pending: count ?? 0 }); return; }
+    }
+    void doPunchOut();
+  }
+
+  async function doPunchOut() {
+    if (!user || !punch) return;
     setBusyPunch(true);
     const { error } = await supabase.from("attendance").update({ punch_out_at: new Date().toISOString() }).eq("id", punch.id);
     setBusyPunch(false);
     if (error) return toast.error(error.message);
     toast.success("Punched out");
+    setPunchOutGuard(null);
     void loadPunch();
+  }
+
+  async function movePendingToTomorrow() {
+    if (!user) return;
+    const workDate = format(new Date(), "yyyy-MM-dd");
+    const tomorrow = format(new Date(Date.now() + 86400000), "yyyy-MM-dd");
+    const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
+    if (!flow) return doPunchOut();
+    const { data: items } = await supabase.from("calling_flow_items").select("lead_id, category, priority, attempts_planned").eq("flow_id", flow.id).in("status", ["pending", "in_progress"]);
+    await supabase.from("calling_flows").delete().eq("user_id", user.id).eq("work_date", tomorrow);
+    const { data: newFlow } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: tomorrow, status: "active" }).select("id").single();
+    if (newFlow && items && items.length) {
+      await supabase.from("calling_flow_items").insert(items.map((i) => ({ flow_id: newFlow.id, ...i, attempts_done: 0, status: "pending" as const })));
+    }
+    toast.success(`Moved ${items?.length ?? 0} leads to tomorrow`);
+    void doPunchOut();
   }
 
   const kpis = [
@@ -205,7 +238,13 @@ function Page() {
                 <p className="text-sm">In at <span className="font-semibold">{format(new Date(punch.punch_in_at), "h:mm a")}</span></p>
                 {punch.punch_out_at
                   ? <p className="text-sm text-muted-foreground">Out at {format(new Date(punch.punch_out_at), "h:mm a")}</p>
-                  : <Button onClick={punchOut} disabled={busyPunch} variant="outline" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>}
+                  : (
+                    <div className="space-y-2">
+                      <Button onClick={() => setCreateFlowOpen(true)} size="sm" className="w-full bg-gradient-primary"><Phone className="size-3 mr-2" />Create today's flow</Button>
+                      <Button onClick={() => navigate({ to: "/calling" })} variant="outline" size="sm" className="w-full">Open calling</Button>
+                      <Button onClick={punchOut} disabled={busyPunch} variant="ghost" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>
+                    </div>
+                  )}
               </div>
             ) : (
               <Button onClick={punchIn} disabled={busyPunch} className="w-full bg-gradient-primary">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch in</Button>
@@ -293,6 +332,22 @@ function Page() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <CreateFlowModal open={createFlowOpen} onOpenChange={setCreateFlowOpen} onCreated={() => navigate({ to: "/calling" })} />
+
+      <AlertDialog open={!!punchOutGuard} onOpenChange={(v) => !v && setPunchOutGuard(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pending calls detected</AlertDialogTitle>
+            <AlertDialogDescription>You have {punchOutGuard?.pending} leads still in today's calling queue. What would you like to do?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Keep working</AlertDialogCancel>
+            <Button variant="outline" onClick={() => { setPunchOutGuard(null); void doPunchOut(); }}>Ignore & punch out</Button>
+            <AlertDialogAction onClick={() => void movePendingToTomorrow()}>Move to tomorrow</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
