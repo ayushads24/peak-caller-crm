@@ -79,11 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Call to Grow — Sales CRM for high-performance teams" },
       { name: "description", content: "Manage leads, track calls, run your sales pipeline with a modern, fast CRM." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Call to Grow" },
-      { property: "og:description", content: "Modern sales CRM for high-performance teams." },
+      { property: "og:title", content: "Call to Grow — Sales CRM for high-performance teams" },
+      { property: "og:description", content: "Manage leads, track calls, run your sales pipeline with a modern, fast CRM." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Call to Grow — Sales CRM for high-performance teams" },
+      { name: "twitter:description", content: "Manage leads, track calls, run your sales pipeline with a modern, fast CRM." },
     ],
     links: [
       {
