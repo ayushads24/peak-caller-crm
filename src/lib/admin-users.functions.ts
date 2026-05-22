@@ -20,7 +20,7 @@ export const adminListUsers = createServerFn({ method: "GET" })
     await assertAdmin(context.userId);
     const { data: profiles, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, email, full_name, phone, is_active, team_id, created_at")
+      .select("id, email, full_name, phone, is_active, team_id, designation, last_login_at, created_at")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
@@ -49,6 +49,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       phone: z.string().trim().max(40).optional().nullable(),
       role: Role,
       team_id: z.string().uuid().optional().nullable(),
+      designation: z.string().trim().max(120).optional().nullable(),
       is_active: z.boolean().default(true),
     }).parse(input),
   )
@@ -67,6 +68,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       full_name: data.full_name,
       phone: data.phone ?? null,
       team_id: data.team_id ?? null,
+      designation: data.designation ?? null,
       is_active: data.is_active,
     }).eq("id", uid);
     // Role: trigger assigns 'caller' by default. Replace with the requested role.
@@ -84,6 +86,7 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
       phone: z.string().trim().max(40).nullable().optional(),
       role: Role.optional(),
       team_id: z.string().uuid().nullable().optional(),
+      designation: z.string().trim().max(120).nullable().optional(),
       is_active: z.boolean().optional(),
       password: z.string().min(8).max(128).optional(),
     }).parse(input),
@@ -94,6 +97,7 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
       ...(data.full_name !== undefined && { full_name: data.full_name }),
       ...(data.phone !== undefined && { phone: data.phone }),
       ...(data.team_id !== undefined && { team_id: data.team_id }),
+      ...(data.designation !== undefined && { designation: data.designation }),
       ...(data.is_active !== undefined && { is_active: data.is_active }),
     };
     if (Object.keys(profilePatch).length > 0) {
