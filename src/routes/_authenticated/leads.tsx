@@ -424,6 +424,7 @@ function Page() {
               <th className="text-left p-3 font-medium">Contact</th>
               <th className="text-left p-3 font-medium">Status</th>
               <th className="text-left p-3 font-medium">Labels</th>
+              <th className="text-left p-3 font-medium">Assigned</th>
               <th className="text-left p-3 font-medium">Value</th>
               <th className="text-left p-3 font-medium">Created</th>
               <th className="p-3 w-10"></th>
@@ -431,7 +432,7 @@ function Page() {
           </thead>
           <tbody>
             {leads === null && Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-t"><td colSpan={8} className="p-3"><Skeleton className="h-6" /></td></tr>
+              <tr key={i} className="border-t"><td colSpan={9} className="p-3"><Skeleton className="h-6" /></td></tr>
             ))}
             {leads && pageLeads.map((l) => {
               const s = statuses.find((x) => x.id === l.status_id);
@@ -474,6 +475,13 @@ function Page() {
                       onRemove={(lid) => removeLabelFromLead(l.id, lid)}
                     />
                   </td>
+                  <td className="p-3 text-xs">
+                    {l.assigned_to
+                      ? (profiles.find((p) => p.id === l.assigned_to)?.full_name
+                          ?? profiles.find((p) => p.id === l.assigned_to)?.email
+                          ?? "—")
+                      : <span className="text-muted-foreground">Unassigned</span>}
+                  </td>
                   <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
                   <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -485,7 +493,7 @@ function Page() {
               );
             })}
             {leads && filtered.length === 0 && (
-              <tr><td colSpan={8} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
+              <tr><td colSpan={9} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -551,7 +559,7 @@ function Page() {
         </div>
       )}
 
-      <LeadDetailSheet lead={active} statuses={statuses} labels={labels} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
+      <LeadDetailSheet lead={active} statuses={statuses} labels={labels} profiles={profiles} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
     </div>
   );
 }

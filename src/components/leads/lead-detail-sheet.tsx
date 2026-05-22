@@ -28,23 +28,26 @@ export interface LeadRow {
 
 export interface StatusRow { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean; }
 export interface LabelRow { id: string; name: string; color: string; }
+export interface ProfileLite { id: string; full_name: string | null; email: string | null }
 
-export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, onChanged }: {
+export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, onOpenChange, onChanged }: {
   lead: LeadRow | null;
   statuses: StatusRow[];
   labels: LabelRow[];
+  profiles?: ProfileLite[];
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onChanged: () => void;
 }) {
   const { user } = useAuth();
   const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
-  const [tasks, setTasks] = useState<{ id: string; title: string; status: string; due_date: string | null }[]>([]);
+  const [tasks, setTasks] = useState<{ id: string; title: string; status: string; due_date: string | null; assigned_to: string | null }[]>([]);
   const [activities, setActivities] = useState<{ id: string; description: string; created_at: string; type: string }[]>([]);
   const [leadLabelIds, setLeadLabelIds] = useState<string[]>([]);
   const [noteText, setNoteText] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [taskAssignee, setTaskAssignee] = useState<string>("");
   const [edit, setEdit] = useState<LeadRow | null>(null);
 
   useEffect(() => { setEdit(lead); if (lead) void loadRelated(lead.id); }, [lead]);
@@ -52,7 +55,7 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
   async function loadRelated(id: string) {
     const [n, t, a, ll] = await Promise.all([
       supabase.from("notes").select("id, content, created_at").eq("lead_id", id).order("created_at", { ascending: false }),
-      supabase.from("tasks").select("id, title, status, due_date").eq("lead_id", id).order("created_at", { ascending: false }),
+      supabase.from("tasks").select("id, title, status, due_date, assigned_to").eq("lead_id", id).order("created_at", { ascending: false }),
       supabase.from("activities").select("id, description, created_at, type").eq("lead_id", id).order("created_at", { ascending: false }),
       supabase.from("lead_labels").select("label_id").eq("lead_id", id),
     ]);
@@ -73,6 +76,7 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
       sales_value: edit.sales_value,
       lead_source: edit.lead_source,
       status_id: edit.status_id,
+      assigned_to: edit.assigned_to ?? null,
     }).eq("id", edit.id);
     if (error) return toast.error(error.message);
     toast.success("Lead updated");
@@ -93,9 +97,10 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
     const { error } = await supabase.from("tasks").insert({
       lead_id: lead!.id, title: taskTitle, created_by: user.id, status: "pending",
       due_date: taskDue ? new Date(taskDue).toISOString() : null,
+      assigned_to: taskAssignee || null,
     });
     if (error) return toast.error(error.message);
-    setTaskTitle(""); setTaskDue("");
+    setTaskTitle(""); setTaskDue(""); setTaskAssignee("");
     void loadRelated(lead!.id);
   }
 
@@ -168,6 +173,17 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
                 ))}</SelectContent>
               </Select>
             </Field>
+            <Field label="Assigned to">
+              <Select value={edit.assigned_to ?? "__unassigned"} onValueChange={(v) => setEdit({ ...edit, assigned_to: v === "__unassigned" ? null : v })}>
+                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unassigned">Unassigned</SelectItem>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.full_name || p.email || p.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Labels">
               <div className="flex flex-wrap gap-1.5 items-center">
                 {assignedLabels.map((l) => (
@@ -231,6 +247,15 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
                 <Input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Task title" />
                 <div className="flex gap-2">
                   <Input type="datetime-local" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} />
+                  <Select value={taskAssignee || "__me"} onValueChange={(v) => setTaskAssignee(v === "__me" ? "" : v)}>
+                    <SelectTrigger className="w-44"><SelectValue placeholder="Assign to" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__me">Assign to me</SelectItem>
+                      {profiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.full_name || p.email || p.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button onClick={addTask} className="bg-gradient-primary"><Plus className="size-4 mr-1" />Add</Button>
                 </div>
               </div>
@@ -241,7 +266,14 @@ export function LeadDetailSheet({ lead, statuses, labels, open, onOpenChange, on
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className={t.status === "completed" ? "line-through text-muted-foreground" : ""}>{t.title}</p>
-                    {t.due_date && <p className="text-[10px] text-muted-foreground">Due {new Date(t.due_date).toLocaleString()}</p>}
+                    <p className="text-[10px] text-muted-foreground">
+                      {t.due_date && <>Due {new Date(t.due_date).toLocaleString()}</>}
+                      {t.assigned_to && (
+                        <> · For {profiles.find((p) => p.id === t.assigned_to)?.full_name
+                          ?? profiles.find((p) => p.id === t.assigned_to)?.email
+                          ?? "teammate"}</>
+                      )}
+                    </p>
                   </div>
                 </div>
               ))}

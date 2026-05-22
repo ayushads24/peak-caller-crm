@@ -558,6 +558,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          assigned_to: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -569,6 +570,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -580,6 +582,7 @@ export type Database = {
           title: string
         }
         Update: {
+          assigned_to?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
