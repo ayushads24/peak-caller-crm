@@ -125,6 +125,34 @@ function ImportPage() {
 
   function handleFile(file: File) {
     setFilename(file.name);
+    void parseChosenFile(file);
+  }
+
+  function downloadSample() {
+    const sample = [
+      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Notes", "Created Date", "Follow-up Date"],
+      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Interested in premium plan", "08/05/2026", "15/05/2026"],
+      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Asked for callback", "10/05/2026", "12/05/2026"],
+      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "Sent quote on whatsapp", "12/05/2026", ""],
+    ];
+    const csv = sample.map((row) =>
+      row.map((c) => {
+        const s = String(c);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(",")
+    ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "leads-import-sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Sample file downloaded");
+  }
+
+  function parseChosenFile(file: File) {
+    setFilename(file.name);
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext === "csv") {
       Papa.parse<Record<string, string>>(file, {
