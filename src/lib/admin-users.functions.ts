@@ -74,6 +74,17 @@ export const adminCreateUser = createServerFn({ method: "POST" })
     // Role: trigger assigns 'caller' by default. Replace with the requested role.
     await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
     await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: data.role });
+    // Auto-create a team for team leaders so they appear in the "Team leader" picker.
+    if (data.role === "team_leader") {
+      const { data: existing } = await supabaseAdmin
+        .from("teams").select("id").eq("leader_id", uid).maybeSingle();
+      if (!existing) {
+        await supabaseAdmin.from("teams").insert({
+          name: `${data.full_name}'s Team`,
+          leader_id: uid,
+        });
+      }
+    }
     return { id: uid };
   });
 
@@ -107,6 +118,19 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
     if (data.role) {
       await supabaseAdmin.from("user_roles").delete().eq("user_id", data.id);
       await supabaseAdmin.from("user_roles").insert({ user_id: data.id, role: data.role });
+      if (data.role === "team_leader") {
+        const { data: existing } = await supabaseAdmin
+          .from("teams").select("id").eq("leader_id", data.id).maybeSingle();
+        if (!existing) {
+          const { data: prof } = await supabaseAdmin
+            .from("profiles").select("full_name, email").eq("id", data.id).maybeSingle();
+          const label = prof?.full_name || prof?.email || "Team";
+          await supabaseAdmin.from("teams").insert({
+            name: `${label}'s Team`,
+            leader_id: data.id,
+          });
+        }
+      }
     }
     if (data.password) {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(data.id, { password: data.password });
