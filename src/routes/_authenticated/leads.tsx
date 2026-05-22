@@ -226,9 +226,24 @@ function Page() {
     URL.revokeObjectURL(url);
   }
 
-  async function quickStatus(id: string, status_id: string) {
-    const { error } = await supabase.from("leads").update({ status_id }).eq("id", id);
-    if (error) toast.error(error.message); else toast.success("Status updated");
+  async function deleteLead(id: string) {
+    if (!confirm("Delete this lead permanently?")) return;
+    const { error } = await supabase.from("leads").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Lead deleted");
+    setSelected((s) => { const ns = new Set(s); ns.delete(id); return ns; });
+    load();
+  }
+
+  async function bulkDelete() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} leads permanently?`)) return;
+    const { error } = await supabase.from("leads").delete().in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`Deleted ${ids.length} leads`);
+    clearSelection();
+    load();
   }
 
   function exportCsv() {
