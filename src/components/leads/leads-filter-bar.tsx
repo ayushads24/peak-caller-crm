@@ -170,6 +170,32 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
 }
 
+function AssignedFilter({ filters, onChange, profiles }: { filters: LeadFilters; onChange: (f: LeadFilters) => void; profiles: ProfileLite[] }) {
+  const active = filters.assignedTo !== "any";
+  const name = profiles.find((p) => p.id === filters.assignedTo)?.full_name;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1">
+          <UserIcon className="size-4" /> Assigned
+          {active && <Badge className="ml-1 h-5 px-1.5">1</Badge>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-3 space-y-3">
+        <Field label="Assigned to">
+          <UserSelect value={filters.assignedTo} onChange={(v) => onChange({ ...filters, assignedTo: v })} profiles={profiles} />
+        </Field>
+        {active && (
+          <Button variant="ghost" size="sm" className="w-full"
+            onClick={() => onChange({ ...filters, assignedTo: "any" })}>
+            Clear assigned filter
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function MovementFilter({ filters, onChange, statuses }: { filters: LeadFilters; onChange: (f: LeadFilters) => void; statuses: StatusRow[] }) {
   const active = filters.moveFrom !== "any" || filters.moveTo !== "any" || !!filters.moveDateFrom || !!filters.moveDateTo;
   return (
