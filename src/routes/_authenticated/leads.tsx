@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { formatDistanceToNow } from "date-fns";
@@ -198,6 +198,15 @@ function Page() {
     if (error) return toast.error(error.message);
     toast.success(`Updated ${ids.length} leads`);
     clearSelection();
+  }
+  async function bulkReassign(assigned_to: string | null) {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const { error } = await supabase.from("leads").update({ assigned_to }).in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(assigned_to ? `Reassigned ${ids.length} leads` : `Unassigned ${ids.length} leads`);
+    clearSelection();
+    load();
   }
   async function bulkAddLabel(label_id: string) {
     const ids = Array.from(selected);
@@ -397,6 +406,24 @@ function Page() {
           <Button size="sm" variant="outline" className="gap-1" onClick={exportSelected}>
             <Download className="size-3.5" /> Export selected
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1"><UserCog className="size-3.5" /> Reassign</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+              <DropdownMenuLabel>Assign to…</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => bulkReassign(null)}>
+                <X className="size-3.5 mr-2" /> Unassigned
+              </DropdownMenuItem>
+              {profiles.map((p) => (
+                <DropdownMenuItem key={p.id} onClick={() => bulkReassign(p.id)}>
+                  {p.full_name || p.email}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" onClick={bulkDelete}>
             <Trash2 className="size-3.5" /> Delete selected
