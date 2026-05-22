@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth, isAdmin, hasPermission } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
@@ -35,6 +35,7 @@ function Layout() {
     { to: "/workflow",  icon: Phone,           label: "Workflow",  perm: "workflow.view" },
     { to: "/leads",     icon: Users,           label: "Leads",     perm: "leads.view" },
     { to: "/import",    icon: Upload,          label: "Import",    perm: "leads.import" },
+    { to: "/integrations", icon: Plug,         label: "Integrations", perm: "settings.view" },
     { to: "/users",     icon: UserCog,         label: "Users",     perm: "users.view" },
     { to: "/settings",  icon: Settings,        label: "Settings",  perm: "settings.view" },
   ] as const;
