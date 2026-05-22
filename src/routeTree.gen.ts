@@ -21,6 +21,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicWebhookFacebookRouteImport } from './routes/api/public/webhook.facebook'
 import { Route as ApiPublicWebhookDoubletickRouteImport } from './routes/api/public/webhook.doubletick'
 
 const SignupRoute = SignupRouteImport.update({
@@ -82,6 +83,12 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicWebhookFacebookRoute =
+  ApiPublicWebhookFacebookRouteImport.update({
+    id: '/api/public/webhook/facebook',
+    path: '/api/public/webhook/facebook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWebhookDoubletickRoute =
   ApiPublicWebhookDoubletickRouteImport.update({
     id: '/api/public/webhook/doubletick',
@@ -102,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -116,6 +124,7 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -132,6 +141,7 @@ export interface FileRoutesById {
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
+  '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/workflow'
     | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/workflow'
     | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   id:
     | '__root__'
     | '/'
@@ -177,6 +189,7 @@ export interface FileRouteTypes {
     | '/_authenticated/users'
     | '/_authenticated/workflow'
     | '/api/public/webhook/doubletick'
+    | '/api/public/webhook/facebook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -187,6 +200,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   ApiPublicWebhookDoubletickRoute: typeof ApiPublicWebhookDoubletickRoute
+  ApiPublicWebhookFacebookRoute: typeof ApiPublicWebhookFacebookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -275,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/webhook/facebook': {
+      id: '/api/public/webhook/facebook'
+      path: '/api/public/webhook/facebook'
+      fullPath: '/api/public/webhook/facebook'
+      preLoaderRoute: typeof ApiPublicWebhookFacebookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhook/doubletick': {
       id: '/api/public/webhook/doubletick'
       path: '/api/public/webhook/doubletick'
@@ -315,6 +336,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   ApiPublicWebhookDoubletickRoute: ApiPublicWebhookDoubletickRoute,
+  ApiPublicWebhookFacebookRoute: ApiPublicWebhookFacebookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
