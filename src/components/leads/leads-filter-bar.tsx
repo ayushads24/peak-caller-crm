@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch } from "lucide-react";
+import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch, User as UserIcon } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { StatusRow, LabelRow } from "@/components/leads/lead-detail-sheet";
@@ -80,7 +80,6 @@ export function LeadsFilterBar({
   profiles: ProfileLite[];
   teams: { id: string; name: string }[];
 }) {
-  void profiles; void teams;
   const count = useMemo(() => activeCount(filters), [filters]);
 
   function set<K extends keyof LeadFilters>(k: K, v: LeadFilters[K]) { onChange({ ...filters, [k]: v }); }
@@ -125,7 +124,7 @@ export function LeadsFilterBar({
           onClear={() => set("sources", [])}
         />
 
-        <DateFilter filters={filters} onChange={onChange} />
+        <AssignedFilter filters={filters} onChange={onChange} profiles={profiles} />
 
         <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
 
@@ -145,6 +144,11 @@ export function LeadsFilterBar({
             return l && <Chip key={id} color={l.color} onClear={() => toggleArr("labelIds", id)}>Label: {l.name}</Chip>;
           })}
           {filters.sources.map((s) => <Chip key={s} onClear={() => toggleArr("sources", s)}>Source: {s}</Chip>)}
+          {filters.assignedTo !== "any" && (
+            <Chip onClear={() => onChange({ ...filters, assignedTo: "any" })}>
+              Assigned: {profiles.find((p) => p.id === filters.assignedTo)?.full_name ?? "…"}
+            </Chip>
+          )}
           {(filters.dateFrom || filters.dateTo) && <Chip onClear={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
             Date: {fmt(filters.dateFrom)}–{fmt(filters.dateTo)}
           </Chip>}
@@ -164,6 +168,32 @@ function fmt(d?: Date) { return d ? format(d, "dd MMM") : "…"; }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+function AssignedFilter({ filters, onChange, profiles }: { filters: LeadFilters; onChange: (f: LeadFilters) => void; profiles: ProfileLite[] }) {
+  const active = filters.assignedTo !== "any";
+  const name = profiles.find((p) => p.id === filters.assignedTo)?.full_name;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1">
+          <UserIcon className="size-4" /> Assigned
+          {active && <Badge className="ml-1 h-5 px-1.5">1</Badge>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-3 space-y-3">
+        <Field label="Assigned to">
+          <UserSelect value={filters.assignedTo} onChange={(v) => onChange({ ...filters, assignedTo: v })} profiles={profiles} />
+        </Field>
+        {active && (
+          <Button variant="ghost" size="sm" className="w-full"
+            onClick={() => onChange({ ...filters, assignedTo: "any" })}>
+            Clear assigned filter
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function MovementFilter({ filters, onChange, statuses }: { filters: LeadFilters; onChange: (f: LeadFilters) => void; statuses: StatusRow[] }) {
