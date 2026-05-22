@@ -158,7 +158,8 @@ function Page() {
     if (!flow) return doPunchOut();
     const { data: items } = await supabase.from("calling_flow_items").select("lead_id, category, priority, attempts_planned").eq("flow_id", flow.id).in("status", ["pending", "in_progress"]);
     await supabase.from("calling_flows").delete().eq("user_id", user.id).eq("work_date", tomorrow);
-    const { data: newFlow } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: tomorrow, status: "active" }).select("id").single();
+    const flowName = `Workflow — ${format(new Date(tomorrow), "MMM d, yyyy")}`;
+    const { data: newFlow } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: tomorrow, status: "active", name: flowName }).select("id").single();
     if (newFlow && items && items.length) {
       await supabase.from("calling_flow_items").insert(items.map((i) => ({ flow_id: newFlow.id, ...i, attempts_done: 0, status: "pending" as const })));
     }
