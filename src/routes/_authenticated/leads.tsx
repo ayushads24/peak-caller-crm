@@ -426,7 +426,7 @@ function Page() {
               );
             })}
             {leads && filtered.length === 0 && (
-              <tr><td colSpan={6} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
+              <tr><td colSpan={7} className="p-10 text-center text-sm text-muted-foreground">No leads match your filters.</td></tr>
             )}
           </tbody>
         </table>
