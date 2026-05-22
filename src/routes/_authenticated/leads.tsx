@@ -456,6 +456,9 @@ function Page() {
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {l.phone && <Button asChild size="icon" variant="outline" className="size-8"><a href={`tel:${l.phone}`}><Phone className="size-3.5" /></a></Button>}
                   {l.email && <Button asChild size="icon" variant="outline" className="size-8"><a href={`mailto:${l.email}`}><Mail className="size-3.5" /></a></Button>}
+                  <Button size="icon" variant="outline" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
               </div>
             </Card>
