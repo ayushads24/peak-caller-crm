@@ -211,6 +211,20 @@ function UserDialog({ children, teams, existing, onSaved }: {
   const [teamId, setTeamId] = useState<string>(existing?.team_id ?? "__none__");
   const [saving, setSaving] = useState(false);
 
+  // Team leader selector: list users with team_leader role. Selecting a leader
+  // assigns this user to that leader's team (via teams.leader_id lookup).
+  const leaders = teams
+    .filter((t) => t.leader_id)
+    .map((t) => ({ leaderId: t.leader_id as string, teamId: t.id, teamName: t.name, leaderName: t.leader?.full_name || t.leader?.email || "Unknown" }));
+  const currentLeaderId = leaders.find((l) => l.teamId === teamId)?.leaderId ?? "__none__";
+  const showLeaderField = role !== "team_leader" && role !== "admin";
+
+  function onLeaderChange(leaderId: string) {
+    if (leaderId === "__none__") { setTeamId("__none__"); return; }
+    const match = leaders.find((l) => l.leaderId === leaderId);
+    setTeamId(match?.teamId ?? "__none__");
+  }
+
   async function save() {
     setSaving(true);
     try {
@@ -262,16 +276,23 @@ function UserDialog({ children, teams, existing, onSaved }: {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Team</Label>
-            <Select value={teamId} onValueChange={setTeamId}>
-              <SelectTrigger><SelectValue placeholder="No team" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">No team</SelectItem>
-                {teams.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {showLeaderField && (
+            <div>
+              <Label>Team leader</Label>
+              <Select value={currentLeaderId} onValueChange={onLeaderChange}>
+                <SelectTrigger><SelectValue placeholder="Select team leader" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No team leader</SelectItem>
+                  {leaders.map((l) => (
+                    <SelectItem key={l.leaderId} value={l.leaderId}>{l.leaderName} <span className="text-muted-foreground">· {l.teamName}</span></SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {leaders.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">No team leaders yet. Create a team with a leader first in the Teams tab.</p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
