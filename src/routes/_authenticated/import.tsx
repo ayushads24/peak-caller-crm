@@ -625,7 +625,13 @@ function ImportPage() {
                       <tr key={i} className={`border-t ${missing ? "bg-red-500/5" : isDup ? "bg-amber-500/5" : ""}`}>
                         {FIELDS.map((f) => {
                           let v: string = "";
-                          if (f.key === "created_at") v = createdAt ? format(createdAt, "yyyy-MM-dd HH:mm") : (r.created_at ? String(r.created_at) : "");
+                          if (f.key === "created_at") {
+                            const raw = r.created_at ? String(r.created_at) : "";
+                            if (createdAt) v = format(createdAt, "yyyy-MM-dd HH:mm");
+                            else if (raw) {
+                              return <td key={f.key} className="p-2 max-w-[180px] truncate text-red-600" title={`Parse fail: ${raw}`}>⚠ {raw}</td>;
+                            } else v = "";
+                          }
                           else if (f.key === "follow_up") { const d = parseFlexibleDate(r.follow_up); v = d ? format(d, "yyyy-MM-dd") : (r.follow_up ? String(r.follow_up) : ""); }
                           else v = r[f.key] == null ? "" : String(r[f.key]);
                           return <td key={f.key} className="p-2 max-w-[180px] truncate" title={v}>{v}</td>;
