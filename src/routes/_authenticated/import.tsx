@@ -377,7 +377,7 @@ function ImportPage() {
       }
       toInsert.push({
         payload,
-        notes: r.notes ? String(r.notes) : undefined,
+        notes: buildCombinedNotes(r),
         followUp: followUp ?? undefined,
         taskTitle: r.task_title ? String(r.task_title).trim() : undefined,
         taskDue: taskDue ?? undefined,
