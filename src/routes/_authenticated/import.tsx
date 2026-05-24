@@ -29,7 +29,8 @@ type FieldKey =
   | "assigned_to"
   | "task_title"
   | "task_due_date"
-  | "task_description";
+  | "task_description"
+  | "label";
 
 const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "client_name", label: "Name", required: true },
@@ -45,6 +46,7 @@ const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "task_title", label: "Task Title" },
   { key: "task_due_date", label: "Task Due Date" },
   { key: "task_description", label: "Task Description" },
+  { key: "label", label: "Labels (comma separated)" },
 ];
 
 const SKIP = "__skip__";
@@ -71,6 +73,7 @@ function autoGuess(header: string): FieldKey | typeof SKIP {
   if (/taskdue|taskdate|taskdeadline/.test(h)) return "task_due_date";
   if (/taskdesc|taskdetail|tasknote/.test(h)) return "task_description";
   if (/assign|owner|salesperson|salesrep|rep$|assignedto/.test(h)) return "assigned_to";
+  if (/^label|tag/.test(h)) return "label";
   if (/note|comment|remark|message/.test(h)) return "notes";
   if (/created|leaddate|date$|enquiry|enquirydate/.test(h)) return "created_at";
   if (/follow|next|reminder/.test(h)) return "follow_up";
@@ -115,6 +118,7 @@ function ImportPage() {
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
   const [existingPhones, setExistingPhones] = useState<Set<string>>(new Set());
   const [profilesList, setProfilesList] = useState<{ id: string; full_name: string | null; email: string | null }[]>([]);
+  const [labelsList, setLabelsList] = useState<{ id: string; name: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<BatchLog[]>([]);
   const canImport = isAdmin(roles) || hasPermission(permissions, "leads.import");
@@ -122,16 +126,18 @@ function ImportPage() {
   useEffect(() => { void loadMeta(); }, []);
 
   async function loadMeta() {
-    const [s, l, h, p] = await Promise.all([
+    const [s, l, h, p, lb] = await Promise.all([
       supabase.from("statuses").select("id, name").order("sort_order"),
       supabase.from("leads").select("phone").not("phone", "is", null),
       supabase.from("import_batches").select("*").order("created_at", { ascending: false }).limit(10),
       supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("labels").select("id, name"),
     ]);
     setStatuses((s.data ?? []) as { id: string; name: string }[]);
       setExistingPhones(new Set((l.data ?? []).map((r: { phone: string | null }) => normalizePhone(r.phone)).filter(Boolean)));
     setHistory((h.data ?? []) as BatchLog[]);
     setProfilesList((p.data ?? []) as { id: string; full_name: string | null; email: string | null }[]);
+    setLabelsList((lb.data ?? []) as { id: string; name: string }[]);
   }
 
   function normalizePhone(p: unknown): string {
@@ -145,10 +151,10 @@ function ImportPage() {
 
   function downloadSample() {
     const sample = [
-      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Notes", "Created Date", "Follow-up Date", "Assigned To", "Task Title", "Task Due Date", "Task Description"],
-      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Interested in premium plan", "08/05/2026", "15/05/2026", "priya@company.com", "Send proposal", "16/05/2026", "Email PDF quote"],
-      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Asked for callback", "10/05/2026", "12/05/2026", "Aman Gupta", "Callback", "12/05/2026", ""],
-      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "Sent quote on whatsapp", "12/05/2026", "", "", "", "", ""],
+      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Label", "Notes", "Created Date", "Follow-up Date", "Assigned To", "Task Title", "Task Due Date", "Task Description"],
+      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Hot, Premium", "Interested in premium plan", "08/05/2026", "15/05/2026", "priya@company.com", "Send proposal", "16/05/2026", "Email PDF quote"],
+      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Warm", "Asked for callback", "10/05/2026", "12/05/2026", "Aman Gupta", "Callback", "12/05/2026", ""],
+      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "", "Sent quote on whatsapp", "12/05/2026", "", "", "", "", ""],
     ];
     const csv = sample.map((row) =>
       row.map((c) => {
@@ -230,17 +236,59 @@ function ImportPage() {
   async function runImport() {
     if (!user) return;
     setImporting(true);
-    const statusMap = new Map(statuses.map((s) => [s.name.toLowerCase(), s.id]));
+    const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const statusMap = new Map<string, string>();
+    statuses.forEach((s) => {
+      statusMap.set(s.name.trim().toLowerCase(), s.id);
+      statusMap.set(norm(s.name), s.id);
+    });
     const profileByName = new Map<string, string>();
     const profileByEmail = new Map<string, string>();
     profilesList.forEach((p) => {
-      if (p.full_name) profileByName.set(p.full_name.trim().toLowerCase(), p.id);
-      if (p.email) profileByEmail.set(p.email.trim().toLowerCase(), p.id);
+      if (p.full_name) {
+        profileByName.set(p.full_name.trim().toLowerCase(), p.id);
+        profileByName.set(norm(p.full_name), p.id);
+      }
+      if (p.email) {
+        profileByEmail.set(p.email.trim().toLowerCase(), p.id);
+        profileByEmail.set(norm(p.email), p.id);
+      }
     });
     function resolveAssignee(raw: unknown): string | null {
       const v = String(raw ?? "").trim().toLowerCase();
       if (!v) return null;
-      return profileByEmail.get(v) ?? profileByName.get(v) ?? null;
+      return profileByEmail.get(v) ?? profileByName.get(v) ?? profileByEmail.get(norm(v)) ?? profileByName.get(norm(v)) ?? null;
+    }
+    function resolveStatus(raw: unknown): string | null {
+      const v = String(raw ?? "").trim().toLowerCase();
+      if (!v) return null;
+      return statusMap.get(v) ?? statusMap.get(norm(v)) ?? null;
+    }
+    // Mutable label cache (we may auto-create missing labels)
+    const labelMap = new Map<string, string>();
+    labelsList.forEach((l) => {
+      labelMap.set(l.name.trim().toLowerCase(), l.id);
+      labelMap.set(norm(l.name), l.id);
+    });
+    async function resolveLabels(raw: unknown): Promise<string[]> {
+      const v = String(raw ?? "").trim();
+      if (!v) return [];
+      const names = v.split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
+      const ids: string[] = [];
+      for (const name of names) {
+        const key = name.toLowerCase();
+        let id = labelMap.get(key) ?? labelMap.get(norm(name));
+        if (!id) {
+          const { data, error } = await supabase.from("labels").insert({ name }).select("id").single();
+          if (!error && data) {
+            id = (data as { id: string }).id;
+            labelMap.set(key, id);
+            labelMap.set(norm(name), id);
+          }
+        }
+        if (id) ids.push(id);
+      }
+      return ids;
     }
     const seen = new Set<string>();
     type LeadInsert = {
@@ -263,6 +311,7 @@ function ImportPage() {
       taskDue?: Date;
       taskDesc?: string;
       assignedTo?: string | null;
+      labelsRaw?: string;
     }> = [];
     let duplicates = 0;
     const errors: { row: number; reason: string }[] = [];
@@ -278,8 +327,10 @@ function ImportPage() {
       const taskDue = parseFlexibleDate(r.task_due_date);
       const salesRaw = r.sales_value;
       const sales = salesRaw === "" || salesRaw == null ? null : Number(String(salesRaw).replace(/[^0-9.-]/g, ""));
-      const statusName = String(r.status ?? "").trim().toLowerCase();
-      const status_id = statusName ? statusMap.get(statusName) ?? null : null;
+      const status_id = resolveStatus(r.status);
+      if (r.status && !status_id) {
+        errors.push({ row: i + 2, reason: `Unknown status: ${String(r.status)}` });
+      }
       const assignedTo = resolveAssignee(r.assigned_to);
       if (r.assigned_to && !assignedTo) {
         errors.push({ row: i + 2, reason: `Unknown assignee: ${String(r.assigned_to)}` });
@@ -306,6 +357,7 @@ function ImportPage() {
         taskDue: taskDue ?? undefined,
         taskDesc: r.task_description ? String(r.task_description).trim() : undefined,
         assignedTo,
+        labelsRaw: r.label ? String(r.label) : undefined,
       });
     });
 
@@ -373,6 +425,19 @@ function ImportPage() {
     if (taskRows.length > 0) {
       const { error } = await supabase.from("tasks").insert(taskRows);
       if (error) errors.push({ row: 0, reason: `Tasks: ${error.message}` });
+    }
+
+    // Insert labels (auto-create missing ones)
+    const labelLinks: { lead_id: string; label_id: string }[] = [];
+    for (const { id, idx } of insertedIds) {
+      const raw = toInsert[idx].labelsRaw;
+      if (!raw) continue;
+      const ids = await resolveLabels(raw);
+      for (const lid of ids) labelLinks.push({ lead_id: id, label_id: lid });
+    }
+    if (labelLinks.length > 0) {
+      const { error } = await supabase.from("lead_labels").insert(labelLinks);
+      if (error) errors.push({ row: 0, reason: `Labels: ${error.message}` });
     }
 
     await logBatch(inserted, duplicates, errors);
