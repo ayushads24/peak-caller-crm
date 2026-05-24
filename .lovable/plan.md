@@ -1,22 +1,36 @@
-## Header fixes
+## Attempts/day field — plain number input
 
-Do baat thik karni hain header mein:
+`src/components/workflow/create-flow-modal.tsx` ke Attempts/day input se up/down spinner arrows hatane hain.
 
-### 1. Save button hamesha faded dikh raha
-Abhi Save tab tak disabled rehta hai jab tak koi field change na ho (dirty tracking). Isliye open karte hi purple/faded dikhta hai aur user ko lagta hai "kuch toot gaya".
+### Change
+Current:
+```tsx
+<Input type="number" min={1} max={5} value={c.attempts}
+  onChange={(e) => update(i, { attempts: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })}
+  className="h-8" />
+```
 
-**Fix:** Dirty tracking hata do. Save button hamesha clickable rahe (jaise pehle tha). Sirf `saving` state ke time disable ho aur "Saving…" dikhe.
+Naya:
+```tsx
+<Input
+  type="text"
+  inputMode="numeric"
+  pattern="[0-9]*"
+  value={c.attempts}
+  onChange={(e) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 1);
+    const n = digits ? Math.max(1, Math.min(5, Number(digits))) : 1;
+    update(i, { attempts: n });
+  }}
+  className="h-8 text-center"
+/>
+```
 
-### 2. Next button gayab lag raha
-Abhi sirf `<` aur `>` icon-only buttons hain top-right corner mein. User ko samajh nahi aaya ki yeh Next/Prev hain.
-
-**Fix:** Icon-only ki jagah text wapas lao:
-- `[< Prev]` aur `[Next >]` — dono labelled buttons, side-by-side, top-right.
-- Disabled state thik se dikhe (Prev abhi hamesha disabled hai kyunki parent se prop nahi aata — usko bhi badle taaki actually kaam kare, ya phir Prev ko hide kar do agar wire nahi karna).
+### Why
+- `type="number"` ke karan browser default spinner (▲▼) dikhata hai — user ko seedha type karna mushkil lagta hai.
+- `type="text"` + `inputMode="numeric"` mobile pe numeric keypad bhi dega, aur arrows nahi dikhayega.
+- Clamping (1–5) wahi rahega, sirf digits accept honge.
 
 ### Scope
-- File: `src/components/leads/lead-detail-sheet.tsx` (header section only)
-- Parent route (`workflow.tsx` / `leads.tsx`) mein optional `onPrev` wire karna — agar haan to confirm karo, warna sirf Next dikhayenge.
-
-### Question
-Prev button bhi chahiye ya sirf Next? (Pehle sirf Next tha.)
+- Sirf ek file, ek input: `src/components/workflow/create-flow-modal.tsx`
+- Koi business logic / save flow change nahi.

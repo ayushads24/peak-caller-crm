@@ -308,7 +308,18 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
                         </div>
                         <div>
                           <Label className="text-[10px] uppercase text-muted-foreground">Attempts/day</Label>
-                          <Input type="number" min={1} max={5} value={c.attempts} onChange={(e) => update(i, { attempts: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })} className="h-8" />
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={c.attempts}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, "").slice(0, 1);
+                              const n = digits ? Math.max(1, Math.min(5, Number(digits))) : 1;
+                              update(i, { attempts: n });
+                            }}
+                            className="h-8 text-center"
+                          />
                         </div>
                       </div>
                     )}
