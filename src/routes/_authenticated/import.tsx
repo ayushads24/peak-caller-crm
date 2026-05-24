@@ -636,9 +636,9 @@ function ImportPage() {
                     const phone = normalizePhone(r.phone);
                     const name = String(r.client_name ?? "").trim();
                     const isDup = phone && existingPhones.has(phone);
+                    const createdAt = parseFlexibleDate(r.created_at);
                     const badCreatedDate = !r.created_at || !createdAt;
                     const missing = !name || !phone || badCreatedDate;
-                    const createdAt = parseFlexibleDate(r.created_at);
                     return (
                       <tr key={i} className={`border-t ${missing ? "bg-red-500/5" : isDup ? "bg-amber-500/5" : ""}`}>
                         {FIELDS.map((f) => {
