@@ -126,6 +126,19 @@ function parseFlexibleDate(v: unknown): Date | null {
     "yyyy-MM-dd", "yyyy/MM/dd",
     "dd/MM/yyyy HH:mm", "dd-MM-yyyy HH:mm",
     "yyyy-MM-dd HH:mm:ss",
+    // 2-digit year
+    "dd/MM/yy", "d/M/yy", "dd-MM-yy", "d-M-yy",
+    // 12-hour AM/PM
+    "dd/MM/yyyy h:mm a", "dd-MM-yyyy h:mm a",
+    "dd/MM/yyyy hh:mm a", "yyyy-MM-dd h:mm a",
+    // month-name formats
+    "dd MMM yyyy", "d MMM yyyy", "dd-MMM-yyyy", "d-MMM-yyyy",
+    "dd MMM yyyy HH:mm", "d MMM yyyy HH:mm",
+    "dd MMM yyyy h:mm a", "d MMM yyyy h:mm a",
+    "dd MMMM yyyy", "d MMMM yyyy",
+    "MMM d, yyyy", "MMMM d, yyyy",
+    "MMM d yyyy", "MMMM d yyyy",
+    "MMM d, yyyy h:mm a", "MMMM d, yyyy h:mm a",
   ];
   for (const f of formats) {
     const d = parseDate(s, f, new Date());
@@ -369,6 +382,9 @@ function ImportPage() {
       if (existingPhones.has(phone) || seen.has(phone)) { duplicates++; return; }
       seen.add(phone);
       const createdAt = parseFlexibleDate(r.created_at);
+      if (r.created_at && !createdAt) {
+        errors.push({ row: i + 2, reason: `Created On parse नहीं हुआ: ${String(r.created_at)}` });
+      }
       const followUp = parseFlexibleDate(r.follow_up);
       const taskDue = parseFlexibleDate(r.task_due_date);
       const salesRaw = r.sales_value;
@@ -609,7 +625,13 @@ function ImportPage() {
                       <tr key={i} className={`border-t ${missing ? "bg-red-500/5" : isDup ? "bg-amber-500/5" : ""}`}>
                         {FIELDS.map((f) => {
                           let v: string = "";
-                          if (f.key === "created_at") v = createdAt ? format(createdAt, "yyyy-MM-dd HH:mm") : (r.created_at ? String(r.created_at) : "");
+                          if (f.key === "created_at") {
+                            const raw = r.created_at ? String(r.created_at) : "";
+                            if (createdAt) v = format(createdAt, "yyyy-MM-dd HH:mm");
+                            else if (raw) {
+                              return <td key={f.key} className="p-2 max-w-[180px] truncate text-red-600" title={`Parse fail: ${raw}`}>⚠ {raw}</td>;
+                            } else v = "";
+                          }
                           else if (f.key === "follow_up") { const d = parseFlexibleDate(r.follow_up); v = d ? format(d, "yyyy-MM-dd") : (r.follow_up ? String(r.follow_up) : ""); }
                           else v = r[f.key] == null ? "" : String(r[f.key]);
                           return <td key={f.key} className="p-2 max-w-[180px] truncate" title={v}>{v}</td>;

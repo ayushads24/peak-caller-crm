@@ -152,7 +152,9 @@ export function LeadsFilterBar({
             </Chip>
           )}
           {(filters.dateFrom || filters.dateTo) && <Chip onClear={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
-            Date: {fmt(filters.dateFrom)}–{fmt(filters.dateTo)}
+            {sameDay(filters.dateFrom, filters.dateTo)
+              ? `Date: ${fmt(filters.dateFrom)}`
+              : `Date: ${fmt(filters.dateFrom)}–${fmt(filters.dateTo)}`}
           </Chip>}
           {(filters.moveFrom !== "any" || filters.moveTo !== "any" || filters.moveDateFrom || filters.moveDateTo) && (
             <Chip onClear={() => onChange({ ...filters, moveFrom: "any", moveTo: "any", moveDateFrom: undefined, moveDateTo: undefined })}>
@@ -167,6 +169,10 @@ export function LeadsFilterBar({
 }
 
 function fmt(d?: Date) { return d ? format(d, "dd MMM") : "…"; }
+function sameDay(a?: Date, b?: Date) {
+  if (!a || !b) return false;
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
@@ -310,6 +316,16 @@ function DateFilter({ filters, onChange }: { filters: LeadFilters; onChange: (f:
             </Button>
           ))}
         </div>
+        <Field label="Specific day (सिर्फ उस एक दिन की leads)">
+          <DateBtn
+            date={filters.dateFrom && filters.dateTo && filters.dateFrom.toDateString() === filters.dateTo.toDateString() ? filters.dateFrom : undefined}
+            placeholder="कोई एक date चुनें"
+            onChange={(d) => {
+              if (!d) onChange({ ...filters, dateFrom: undefined, dateTo: undefined });
+              else onChange({ ...filters, dateFrom: startOfDay(d), dateTo: endOfDay(d) });
+            }}
+          />
+        </Field>
         <Field label="Custom range">
           <DateRange from={filters.dateFrom} to={filters.dateTo}
             onFrom={(d) => onChange({ ...filters, dateFrom: d })}
