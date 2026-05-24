@@ -25,7 +25,11 @@ type FieldKey =
   | "status"
   | "notes"
   | "created_at"
-  | "follow_up";
+  | "follow_up"
+  | "assigned_to"
+  | "task_title"
+  | "task_due_date"
+  | "task_description";
 
 const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "client_name", label: "Name", required: true },
@@ -37,6 +41,10 @@ const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "notes", label: "Notes" },
   { key: "created_at", label: "Created Date (historical)" },
   { key: "follow_up", label: "Follow-up Date" },
+  { key: "assigned_to", label: "Assigned To (name or email)" },
+  { key: "task_title", label: "Task Title" },
+  { key: "task_due_date", label: "Task Due Date" },
+  { key: "task_description", label: "Task Description" },
 ];
 
 const SKIP = "__skip__";
@@ -59,6 +67,10 @@ function autoGuess(header: string): FieldKey | typeof SKIP {
   if (/source|campaign|channel/.test(h)) return "lead_source";
   if (/(sales|deal|amount|value|price)/.test(h)) return "sales_value";
   if (/status|stage/.test(h)) return "status";
+  if (/tasktitle|tasksubject|tasktopic/.test(h)) return "task_title";
+  if (/taskdue|taskdate|taskdeadline/.test(h)) return "task_due_date";
+  if (/taskdesc|taskdetail|tasknote/.test(h)) return "task_description";
+  if (/assign|owner|salesperson|salesrep|rep$|assignedto/.test(h)) return "assigned_to";
   if (/note|comment|remark|message/.test(h)) return "notes";
   if (/created|leaddate|date$|enquiry|enquirydate/.test(h)) return "created_at";
   if (/follow|next|reminder/.test(h)) return "follow_up";
