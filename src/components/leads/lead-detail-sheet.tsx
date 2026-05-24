@@ -431,6 +431,7 @@ export function LeadDetailSheet({
                       sales_value: e.target.value === "" ? null : Number(e.target.value),
                     })
                   }
+                  onBlur={save}
                 />
               </div>
             </Field>
