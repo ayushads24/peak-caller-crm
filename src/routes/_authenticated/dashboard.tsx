@@ -259,28 +259,30 @@ function Page() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
         {/* Punch + Calls + Tasks */}
         <div className="space-y-4">
-          <Card className="p-5 shadow-card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display font-semibold flex items-center gap-2"><LogIn className="size-4 text-primary" />Punch-in</h3>
-              <span className="text-[10px] text-muted-foreground">{format(new Date(), "EEE, MMM d")}</span>
-            </div>
-            {punch ? (
-              <div className="space-y-2">
-                <p className="text-sm">In at <span className="font-semibold">{format(new Date(punch.punch_in_at), "h:mm a")}</span></p>
-                {punch.punch_out_at
-                  ? <p className="text-sm text-muted-foreground">Out at {format(new Date(punch.punch_out_at), "h:mm a")}</p>
-                  : (
-                    <div className="space-y-2">
-                      <Button onClick={() => setCreateFlowOpen(true)} size="sm" className="w-full bg-gradient-primary"><Phone className="size-3 mr-2" />Create today's flow</Button>
-                      <Button onClick={() => navigate({ to: "/workflow" })} variant="outline" size="sm" className="w-full">Open workflow</Button>
-                      <Button onClick={punchOut} disabled={busyPunch} variant="ghost" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>
-                    </div>
-                  )}
+          {!isManager && (
+            <Card className="p-5 shadow-card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display font-semibold flex items-center gap-2"><LogIn className="size-4 text-primary" />Punch-in</h3>
+                <span className="text-[10px] text-muted-foreground">{format(new Date(), "EEE, MMM d")}</span>
               </div>
-            ) : (
-              <Button onClick={punchIn} disabled={busyPunch} className="w-full bg-gradient-primary">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch in</Button>
-            )}
-          </Card>
+              {punch ? (
+                <div className="space-y-2">
+                  <p className="text-sm">In at <span className="font-semibold">{format(new Date(punch.punch_in_at), "h:mm a")}</span></p>
+                  {punch.punch_out_at
+                    ? <p className="text-sm text-muted-foreground">Out at {format(new Date(punch.punch_out_at), "h:mm a")}</p>
+                    : (
+                      <div className="space-y-2">
+                        <Button onClick={() => setCreateFlowOpen(true)} size="sm" className="w-full bg-gradient-primary"><Phone className="size-3 mr-2" />Create today's flow</Button>
+                        <Button onClick={() => navigate({ to: "/workflow" })} variant="outline" size="sm" className="w-full">Open workflow</Button>
+                        <Button onClick={punchOut} disabled={busyPunch} variant="ghost" size="sm" className="w-full">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch out</Button>
+                      </div>
+                    )}
+                </div>
+              ) : (
+                <Button onClick={punchIn} disabled={busyPunch} className="w-full bg-gradient-primary">{busyPunch && <Loader2 className="size-3 mr-2 animate-spin" />}Punch in</Button>
+              )}
+            </Card>
+          )}
 
           <Card className="p-5 shadow-card">
             <div className="flex items-center justify-between">
