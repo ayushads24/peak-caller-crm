@@ -54,7 +54,7 @@ function Page() {
       supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at, assigned_to, created_by").order("created_at", { ascending: false }),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color").order("name"),
-      supabase.from("profiles").select("id, full_name, email, team_id").order("full_name"),
+      (supabase as any).from("profiles_directory").select("id, full_name, email, team_id").order("full_name"),
       supabase.from("teams").select("id, name").order("name"),
       supabase.from("lead_labels").select("lead_id, label_id"),
       supabase.from("tasks").select("lead_id, due_date, status").eq("status", "pending").not("due_date", "is", null),
