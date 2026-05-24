@@ -180,7 +180,9 @@ function Page() {
         .order("priority"),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color"),
-      (supabase.from as unknown as (table: "profiles_directory") => ProfilesDirectoryQuery)("profiles_directory")
+      (supabase.from as unknown as (table: "profiles_directory") => ProfilesDirectoryQuery)(
+        "profiles_directory",
+      )
         .select("id, full_name, email")
         .order("full_name"),
       loadBreak(),
