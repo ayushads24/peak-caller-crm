@@ -118,6 +118,7 @@ function ImportPage() {
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
   const [existingPhones, setExistingPhones] = useState<Set<string>>(new Set());
   const [profilesList, setProfilesList] = useState<{ id: string; full_name: string | null; email: string | null }[]>([]);
+  const [labelsList, setLabelsList] = useState<{ id: string; name: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<BatchLog[]>([]);
   const canImport = isAdmin(roles) || hasPermission(permissions, "leads.import");
@@ -125,16 +126,18 @@ function ImportPage() {
   useEffect(() => { void loadMeta(); }, []);
 
   async function loadMeta() {
-    const [s, l, h, p] = await Promise.all([
+    const [s, l, h, p, lb] = await Promise.all([
       supabase.from("statuses").select("id, name").order("sort_order"),
       supabase.from("leads").select("phone").not("phone", "is", null),
       supabase.from("import_batches").select("*").order("created_at", { ascending: false }).limit(10),
       supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("labels").select("id, name"),
     ]);
     setStatuses((s.data ?? []) as { id: string; name: string }[]);
       setExistingPhones(new Set((l.data ?? []).map((r: { phone: string | null }) => normalizePhone(r.phone)).filter(Boolean)));
     setHistory((h.data ?? []) as BatchLog[]);
     setProfilesList((p.data ?? []) as { id: string; full_name: string | null; email: string | null }[]);
+    setLabelsList((lb.data ?? []) as { id: string; name: string }[]);
   }
 
   function normalizePhone(p: unknown): string {
