@@ -717,6 +717,10 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      is_team_member_of_leader: {
+        Args: { _leader: string; _member: string }
+        Returns: boolean
+      }
     }
     Enums: {
       activity_type:
