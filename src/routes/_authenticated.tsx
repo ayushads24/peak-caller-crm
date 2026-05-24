@@ -40,7 +40,7 @@ function Layout() {
     { to: "/settings",  icon: Settings,        label: "Settings",  perm: "settings.view" },
   ] as const;
   const baseNav = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
-  const canManageTeamFlows = isAdminOrManager(roles) || roles.includes("team_leader");
+  const canManageTeamFlows = roles.includes("admin") || roles.includes("team_leader");
   const navItems: { to: string; icon: typeof LayoutDashboard; label: string }[] = [...baseNav];
   if (canManageTeamFlows) {
     const wfIdx = navItems.findIndex((i) => i.to === "/workflow");
