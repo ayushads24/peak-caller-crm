@@ -53,6 +53,8 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
   const [cats, setCats] = useState<CategoryConfig[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
+  const [terminalIds, setTerminalIds] = useState<Set<string>>(new Set());
+  const [counts, setCounts] = useState<Record<string, number | "loading">>({});
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +69,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
       const rows = (data ?? []) as StatusRow[];
       const open_ = rows.filter((s) => !s.is_sales && !s.is_lost);
       setStatuses(open_);
+      setTerminalIds(new Set(rows.filter((s) => s.is_sales || s.is_lost).map((s) => s.id)));
 
       // Seed defaults from real statuses by name (best-effort) + follow-up bucket
       const find = (needle: string) =>
@@ -86,6 +89,53 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
     })();
     return () => { cancelled = true; };
   }, [open]);
+
+  // Live total lead count per row (debounced by filter key)
+  useEffect(() => {
+    if (!open) return;
+    const handles: number[] = [];
+    const cancellers: (() => void)[] = [];
+    for (const c of cats) {
+      const key = `${c.statusId}|${c.fromDate}|${c.toDate}`;
+      setCounts((prev) => ({ ...prev, [c.rowId]: "loading" }));
+      const h = window.setTimeout(async () => {
+        let cancelled = false;
+        cancellers.push(() => { cancelled = true; });
+        try {
+          if (c.statusId === FOLLOWUP_KEY) {
+            // Need to exclude terminal statuses + count nulls — count via select head with filter list
+            let q = supabase
+              .from("leads")
+              .select("id", { count: "exact", head: true })
+              .gte("created_at", new Date(c.fromDate).toISOString())
+              .lte("created_at", new Date(c.toDate + "T23:59:59").toISOString());
+            if (terminalIds.size > 0) {
+              const ids = Array.from(terminalIds);
+              q = q.or(`status_id.is.null,status_id.not.in.(${ids.join(",")})`);
+            }
+            const { count } = await q;
+            if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
+          } else {
+            const { count } = await supabase
+              .from("leads")
+              .select("id", { count: "exact", head: true })
+              .eq("status_id", c.statusId)
+              .gte("created_at", new Date(c.fromDate).toISOString())
+              .lte("created_at", new Date(c.toDate + "T23:59:59").toISOString());
+            if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
+          }
+        } catch {
+          if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: 0 }));
+        }
+        void key;
+      }, 300);
+      handles.push(h);
+    }
+    return () => {
+      handles.forEach((h) => clearTimeout(h));
+      cancellers.forEach((c) => c());
+    };
+  }, [open, cats, terminalIds]);
 
   function update(idx: number, patch: Partial<CategoryConfig>) {
     setCats((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -234,7 +284,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
                       </div>
                     </div>
                     {c.enabled && (
-                      <div className="grid grid-cols-3 gap-2 mt-3">
+                      <div className="grid grid-cols-4 gap-2 mt-3">
                         <div>
                           <Label className="text-[10px] uppercase text-muted-foreground">From</Label>
                           <Input type="date" value={c.fromDate} onChange={(e) => update(i, { fromDate: e.target.value })} className="h-8" />
@@ -242,6 +292,16 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
                         <div>
                           <Label className="text-[10px] uppercase text-muted-foreground">To</Label>
                           <Input type="date" value={c.toDate} onChange={(e) => update(i, { toDate: e.target.value })} className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] uppercase text-muted-foreground">Total Leads</Label>
+                          <div className="h-8 px-2 rounded-md border bg-muted/40 flex items-center justify-center font-semibold tabular-nums">
+                            {counts[c.rowId] === "loading" || counts[c.rowId] === undefined ? (
+                              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                            ) : (
+                              <span style={{ color: meta.color }}>{counts[c.rowId] as number}</span>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <Label className="text-[10px] uppercase text-muted-foreground">Attempts/day</Label>
