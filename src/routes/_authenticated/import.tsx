@@ -236,17 +236,59 @@ function ImportPage() {
   async function runImport() {
     if (!user) return;
     setImporting(true);
-    const statusMap = new Map(statuses.map((s) => [s.name.toLowerCase(), s.id]));
+    const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const statusMap = new Map<string, string>();
+    statuses.forEach((s) => {
+      statusMap.set(s.name.trim().toLowerCase(), s.id);
+      statusMap.set(norm(s.name), s.id);
+    });
     const profileByName = new Map<string, string>();
     const profileByEmail = new Map<string, string>();
     profilesList.forEach((p) => {
-      if (p.full_name) profileByName.set(p.full_name.trim().toLowerCase(), p.id);
-      if (p.email) profileByEmail.set(p.email.trim().toLowerCase(), p.id);
+      if (p.full_name) {
+        profileByName.set(p.full_name.trim().toLowerCase(), p.id);
+        profileByName.set(norm(p.full_name), p.id);
+      }
+      if (p.email) {
+        profileByEmail.set(p.email.trim().toLowerCase(), p.id);
+        profileByEmail.set(norm(p.email), p.id);
+      }
     });
     function resolveAssignee(raw: unknown): string | null {
       const v = String(raw ?? "").trim().toLowerCase();
       if (!v) return null;
-      return profileByEmail.get(v) ?? profileByName.get(v) ?? null;
+      return profileByEmail.get(v) ?? profileByName.get(v) ?? profileByEmail.get(norm(v)) ?? profileByName.get(norm(v)) ?? null;
+    }
+    function resolveStatus(raw: unknown): string | null {
+      const v = String(raw ?? "").trim().toLowerCase();
+      if (!v) return null;
+      return statusMap.get(v) ?? statusMap.get(norm(v)) ?? null;
+    }
+    // Mutable label cache (we may auto-create missing labels)
+    const labelMap = new Map<string, string>();
+    labelsList.forEach((l) => {
+      labelMap.set(l.name.trim().toLowerCase(), l.id);
+      labelMap.set(norm(l.name), l.id);
+    });
+    async function resolveLabels(raw: unknown): Promise<string[]> {
+      const v = String(raw ?? "").trim();
+      if (!v) return [];
+      const names = v.split(/[,;|]/).map((s) => s.trim()).filter(Boolean);
+      const ids: string[] = [];
+      for (const name of names) {
+        const key = name.toLowerCase();
+        let id = labelMap.get(key) ?? labelMap.get(norm(name));
+        if (!id) {
+          const { data, error } = await supabase.from("labels").insert({ name }).select("id").single();
+          if (!error && data) {
+            id = (data as { id: string }).id;
+            labelMap.set(key, id);
+            labelMap.set(norm(name), id);
+          }
+        }
+        if (id) ids.push(id);
+      }
+      return ids;
     }
     const seen = new Set<string>();
     type LeadInsert = {
@@ -269,6 +311,7 @@ function ImportPage() {
       taskDue?: Date;
       taskDesc?: string;
       assignedTo?: string | null;
+      labelsRaw?: string;
     }> = [];
     let duplicates = 0;
     const errors: { row: number; reason: string }[] = [];
@@ -284,8 +327,10 @@ function ImportPage() {
       const taskDue = parseFlexibleDate(r.task_due_date);
       const salesRaw = r.sales_value;
       const sales = salesRaw === "" || salesRaw == null ? null : Number(String(salesRaw).replace(/[^0-9.-]/g, ""));
-      const statusName = String(r.status ?? "").trim().toLowerCase();
-      const status_id = statusName ? statusMap.get(statusName) ?? null : null;
+      const status_id = resolveStatus(r.status);
+      if (r.status && !status_id) {
+        errors.push({ row: i + 2, reason: `Unknown status: ${String(r.status)}` });
+      }
       const assignedTo = resolveAssignee(r.assigned_to);
       if (r.assigned_to && !assignedTo) {
         errors.push({ row: i + 2, reason: `Unknown assignee: ${String(r.assigned_to)}` });
@@ -312,6 +357,7 @@ function ImportPage() {
         taskDue: taskDue ?? undefined,
         taskDesc: r.task_description ? String(r.task_description).trim() : undefined,
         assignedTo,
+        labelsRaw: r.label ? String(r.label) : undefined,
       });
     });
 
