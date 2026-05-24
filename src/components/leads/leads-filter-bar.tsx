@@ -316,6 +316,16 @@ function DateFilter({ filters, onChange }: { filters: LeadFilters; onChange: (f:
             </Button>
           ))}
         </div>
+        <Field label="Specific day (सिर्फ उस एक दिन की leads)">
+          <DateBtn
+            date={filters.dateFrom && filters.dateTo && filters.dateFrom.toDateString() === filters.dateTo.toDateString() ? filters.dateFrom : undefined}
+            placeholder="कोई एक date चुनें"
+            onChange={(d) => {
+              if (!d) onChange({ ...filters, dateFrom: undefined, dateTo: undefined });
+              else onChange({ ...filters, dateFrom: startOfDay(d), dateTo: endOfDay(d) });
+            }}
+          />
+        </Field>
         <Field label="Custom range">
           <DateRange from={filters.dateFrom} to={filters.dateTo}
             onFrom={(d) => onChange({ ...filters, dateFrom: d })}
