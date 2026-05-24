@@ -302,6 +302,9 @@ function Page() {
                     {currentLead.email && <div>✉️ {currentLead.email}</div>}
                     {currentLead.lead_source && <div>Source: {currentLead.lead_source}</div>}
                   </div>
+                  <Button variant="link" size="sm" className="px-0 h-auto mt-1 text-primary" onClick={() => openDetail(currentLead)}>
+                    <Eye className="size-3.5 mr-1" />View full details
+                  </Button>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Attempt</div>
@@ -341,15 +344,37 @@ function Page() {
               const l = leadsMap.get(i.lead_id);
               if (!l) return null;
               const meta = CAT_META[i.category];
+              const tag = leadTag(l);
+              const tagClasses = tag === "new"
+                ? "border-orange-400/60 bg-orange-500/10"
+                : tag === "task"
+                ? "border-yellow-400/60 bg-yellow-500/10"
+                : "";
               return (
-                <div key={i.id} className="flex items-center gap-2 rounded-lg border p-2.5 text-sm">
+                <button
+                  key={i.id}
+                  onClick={() => openDetail(l)}
+                  className={`w-full text-left flex items-center gap-2 rounded-lg border p-2.5 text-sm hover:bg-muted/50 transition-colors ${tagClasses}`}
+                >
                   <span className="size-2 rounded-full shrink-0" style={{ background: meta.color }} />
                   <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{l.client_name}</div>
+                    <div className="truncate font-medium flex items-center gap-1.5">
+                      {l.client_name}
+                      {tag === "new" && (
+                        <Badge className="border-0 bg-orange-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
+                          <span className="size-1.5 rounded-full bg-white animate-pulse" />NEW
+                        </Badge>
+                      )}
+                      {tag === "task" && (
+                        <Badge className="border-0 bg-yellow-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
+                          <AlarmClock className="size-2.5" />Task Due
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-[10px] text-muted-foreground truncate">{meta.label} · {l.phone ?? "no phone"}</div>
                   </div>
                   <span className="text-[10px] text-muted-foreground shrink-0">{i.attempts_done}/{i.attempts_planned}</span>
-                </div>
+                </button>
               );
             })}
             {queue.length <= 1 && <p className="text-xs text-muted-foreground text-center py-4">Queue empty.</p>}
@@ -359,6 +384,15 @@ function Page() {
 
       <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} />
       <PostCallSheet open={postOpen} onOpenChange={setPostOpen} lead={postLead} statuses={statuses} durationStartedAt={callStartedAt} onComplete={() => { setCallStartedAt(null); void advance(); }} />
+      <LeadDetailSheet
+        lead={detailLead}
+        statuses={fullStatuses}
+        labels={labels}
+        profiles={profiles}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onChanged={() => load()}
+      />
     </div>
   );
 }
