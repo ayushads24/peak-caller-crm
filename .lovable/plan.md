@@ -1,23 +1,22 @@
 ## Goal
 
-Make the "Create Today's Workflow" modal fully dynamic: each row picks a status from the `statuses` table, you can add as many rows as you want with a **+** button, and you can reorder them (including newly added rows) using the existing up/down arrows.
+Har row me "Attempts/day" ke left side me ek **Total Leads** count dikhana — jo us row ke selected status + From/To date range ke matching leads ka live count ho.
 
-## Today
-
-The modal currently shows 4 fixed rows (Fresh Leads, Quotation Sent, Interested in Meeting, Follow-up Calls). The status each row targets is hardcoded by name in `DEFAULTS` inside `src/components/workflow/create-flow-modal.tsx`. You can toggle/reorder them but you can't add new ones or change what status they point to.
-
-## Changes
+## Change
 
 **`src/components/workflow/create-flow-modal.tsx`**
 
-1. **Load statuses on open.** Fetch all rows from the `statuses` table (excluding `is_sales`/`is_lost` terminal ones) and keep them in state for the dropdowns.
-2. **Status picker on each row.** Replace the static label with a Select dropdown listing every status from the database (plus a special "Any open status — Follow-up" option for the non-status follow-up bucket). Changing it updates that row's target status and the row's display label.
-3. **"+ Add status row" button** at the bottom of the list. Clicking it appends a new row pre-selected to the first unused status, with sensible defaults (date range = last 7 days, attempts = 2, enabled = true).
-4. **Remove row button** (small × on each row) so you can drop rows you added.
-5. **Reorder works for all rows.** The existing up/down arrows already operate on the list — newly added rows participate automatically, so a row added at the bottom can be moved to the top to become Priority 1.
-6. **Submit logic unchanged in shape** — still builds the queue in the displayed order, dedupes leads across rows, writes `calling_flows` + `calling_flow_items`. Each row's `category` is stored as before (`fresh` / `interested_meeting` / `quotation_sent` / `followup`) — derived from the chosen status so the existing badge colors on the workflow page keep working. Unknown statuses fall back to a generic `followup` category tag.
+1. Date grid ko `grid-cols-3` se `grid-cols-4` kar do. Pehla naya cell: **Total Leads** (read-only, badge-style number).
+2. Har row ka count debounced query se aaye:
+   - `supabase.from("leads").select("id", { count: "exact", head: true })`
+   - `.gte("created_at", from)` + `.lte("created_at", toEndOfDay)`
+   - Agar `statusId !== FOLLOWUP_KEY` → `.eq("status_id", statusId)`
+   - Followup row ke liye terminal status IDs `.not("status_id", "in", terminalIds)` ya null ko allow karne ke liye client-side filter (count head endpoint pe complex; safer: alag fetch with `select("status_id")` aur client filter — but only when followup).
+3. State: `counts: Record<rowId, number | "loading">`. Effect runs whenever `cats`, `statuses` change — debounces 300ms per row by keying on `statusId|fromDate|toDate`.
+4. Loading state me chhota spinner / `—` dikhao.
+5. Followup count: query me terminal exclude karne ke liye pehle terminal IDs nikalo (already fetched on submit; ab `useEffect` me bhi load karna padega ya `statuses` ke saath terminal bhi laao). Simplest: open modal me ek extra fetch `statuses.select("id, is_sales, is_lost")` aur `terminalIds` state me rakho.
 
 ## Out of scope
 
-- No database changes. Statuses are already managed elsewhere (Settings → Statuses) — this just consumes them.
-- No change to how the workflow queue is consumed on the workflow page.
+- No DB changes.
+- Reorder/add/remove logic same.
