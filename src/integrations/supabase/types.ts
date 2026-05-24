@@ -223,6 +223,50 @@ export type Database = {
         }
         Relationships: []
       }
+      distribution_rules: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          method: Database["public"]["Enums"]["distribution_method"]
+          name: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          method: Database["public"]["Enums"]["distribution_method"]
+          name: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          method?: Database["public"]["Enums"]["distribution_method"]
+          name?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distribution_rules_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_batches: {
         Row: {
           created_at: string
@@ -280,6 +324,39 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_assignment_history: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          from_user_id: string | null
+          id: string
+          lead_id: string
+          method: Database["public"]["Enums"]["assignment_method"]
+          reason: string | null
+          to_user_id: string | null
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          lead_id: string
+          method?: Database["public"]["Enums"]["assignment_method"]
+          reason?: string | null
+          to_user_id?: string | null
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          lead_id?: string
+          method?: Database["public"]["Enums"]["assignment_method"]
+          reason?: string | null
+          to_user_id?: string | null
+        }
+        Relationships: []
+      }
       lead_labels: {
         Row: {
           label_id: string
@@ -312,6 +389,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_at: string | null
           assigned_to: string | null
           client_name: string
           closed_at: string | null
@@ -322,11 +400,13 @@ export type Database = {
           imported_at: string | null
           lead_source: string | null
           phone: string | null
+          priority: Database["public"]["Enums"]["lead_priority"]
           sales_value: number | null
           status_id: string | null
           updated_at: string
         }
         Insert: {
+          assigned_at?: string | null
           assigned_to?: string | null
           client_name: string
           closed_at?: string | null
@@ -337,11 +417,13 @@ export type Database = {
           imported_at?: string | null
           lead_source?: string | null
           phone?: string | null
+          priority?: Database["public"]["Enums"]["lead_priority"]
           sales_value?: number | null
           status_id?: string | null
           updated_at?: string
         }
         Update: {
+          assigned_at?: string | null
           assigned_to?: string | null
           client_name?: string
           closed_at?: string | null
@@ -352,6 +434,7 @@ export type Database = {
           imported_at?: string | null
           lead_source?: string | null
           phone?: string | null
+          priority?: Database["public"]["Enums"]["lead_priority"]
           sales_value?: number | null
           status_id?: string | null
           updated_at?: string
@@ -751,6 +834,14 @@ export type Database = {
         | "caller"
         | "team_leader"
         | "project_manager"
+      assignment_method:
+        | "round_robin"
+        | "manual"
+        | "percentage"
+        | "priority"
+        | "source"
+        | "availability"
+        | "system"
       break_type: "lunch" | "tea" | "meeting" | "other"
       call_status:
         | "connected"
@@ -758,6 +849,13 @@ export type Database = {
         | "voicemail"
         | "busy"
         | "wrong_number"
+      distribution_method:
+        | "round_robin"
+        | "manual"
+        | "percentage"
+        | "priority"
+        | "source"
+        | "availability"
       flow_category:
         | "fresh"
         | "interested_meeting"
@@ -770,6 +868,7 @@ export type Database = {
         | "skipped"
         | "rescheduled"
       flow_status: "active" | "paused" | "completed"
+      lead_priority: "low" | "normal" | "high" | "hot"
       meeting_status: "scheduled" | "completed" | "cancelled" | "rescheduled"
       task_priority: "low" | "medium" | "high"
       task_status: "pending" | "in_progress" | "completed"
@@ -920,6 +1019,15 @@ export const Constants = {
         "team_leader",
         "project_manager",
       ],
+      assignment_method: [
+        "round_robin",
+        "manual",
+        "percentage",
+        "priority",
+        "source",
+        "availability",
+        "system",
+      ],
       break_type: ["lunch", "tea", "meeting", "other"],
       call_status: [
         "connected",
@@ -927,6 +1035,14 @@ export const Constants = {
         "voicemail",
         "busy",
         "wrong_number",
+      ],
+      distribution_method: [
+        "round_robin",
+        "manual",
+        "percentage",
+        "priority",
+        "source",
+        "availability",
       ],
       flow_category: [
         "fresh",
@@ -942,6 +1058,7 @@ export const Constants = {
         "rescheduled",
       ],
       flow_status: ["active", "paused", "completed"],
+      lead_priority: ["low", "normal", "high", "hot"],
       meeting_status: ["scheduled", "completed", "cancelled", "rescheduled"],
       task_priority: ["low", "medium", "high"],
       task_status: ["pending", "in_progress", "completed"],
