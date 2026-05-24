@@ -151,6 +151,13 @@ export type Database = {
             referencedRelation: "calling_flows"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "calling_flow_items_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
         ]
       }
       calling_flows: {

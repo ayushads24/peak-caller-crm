@@ -109,6 +109,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
               .select("id", { count: "exact", head: true })
               .gte("created_at", new Date(c.fromDate).toISOString())
               .lte("created_at", new Date(c.toDate + "T23:59:59").toISOString());
+            if (targetUserId) q = q.eq("assigned_to", targetUserId);
             if (terminalIds.size > 0) {
               const ids = Array.from(terminalIds);
               q = q.or(`status_id.is.null,status_id.not.in.(${ids.join(",")})`);
@@ -116,12 +117,14 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
             const { count } = await q;
             if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
           } else {
-            const { count } = await supabase
+            let q = supabase
               .from("leads")
               .select("id", { count: "exact", head: true })
               .eq("status_id", c.statusId)
               .gte("created_at", new Date(c.fromDate).toISOString())
               .lte("created_at", new Date(c.toDate + "T23:59:59").toISOString());
+            if (targetUserId) q = q.eq("assigned_to", targetUserId);
+            const { count } = await q;
             if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
           }
         } catch {
@@ -135,7 +138,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
       handles.forEach((h) => clearTimeout(h));
       cancellers.forEach((c) => c());
     };
-  }, [open, cats, terminalIds]);
+  }, [open, cats, terminalIds, targetUserId]);
 
   function update(idx: number, patch: Partial<CategoryConfig>) {
     setCats((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -194,6 +197,9 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
       if (cat.statusId !== FOLLOWUP_KEY) {
         q = q.eq("status_id", cat.statusId);
       }
+      if (targetUserId) {
+        q = q.eq("assigned_to", targetUserId);
+      }
       const { data: leads } = await q;
       const filtered = (leads ?? []).filter((l) => {
         if (cat.statusId === FOLLOWUP_KEY) return !l.status_id || !terminalIds.has(l.status_id);
@@ -234,7 +240,12 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
           <DialogTitle className="font-display text-xl">
             {targetUserName ? `Create Workflow for ${targetUserName}` : "Create Today's Workflow"}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.</p>
+          <p className="text-sm text-muted-foreground">
+            Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.
+            {targetUserName && (
+              <> Showing only leads assigned to <span className="font-medium text-foreground">{targetUserName}</span>.</>
+            )}
+          </p>
         </DialogHeader>
         <div className="space-y-3 mt-2">
           {loadingStatuses && cats.length === 0 && (
