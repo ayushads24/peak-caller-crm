@@ -255,15 +255,6 @@ export function LeadDetailSheet({
   const availableLabels = labels.filter((l) => !leadLabelIds.includes(l.id));
   const cleanPhone = (edit.phone ?? "").replace(/\D/g, "");
   const assignedProfile = profiles.find((p) => p.id === edit.assigned_to);
-  const dirty =
-    !!lead &&
-    (edit.client_name !== lead.client_name ||
-      (edit.email ?? "") !== (lead.email ?? "") ||
-      (edit.phone ?? "") !== (lead.phone ?? "") ||
-      (edit.sales_value ?? null) !== (lead.sales_value ?? null) ||
-      (edit.lead_source ?? "") !== (lead.lead_source ?? "") ||
-      (edit.status_id ?? "") !== (lead.status_id ?? "") ||
-      (edit.assigned_to ?? "") !== (lead.assigned_to ?? ""));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -299,23 +290,25 @@ export function LeadDetailSheet({
               <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs"
                   onClick={onPrev}
                   disabled={!onPrev}
                   title="Previous (←)"
                 >
-                  <ChevronLeft className="size-4" />
+                  <ChevronLeft className="size-3.5 mr-1" />
+                  Prev
                 </Button>
                 <Button
                   variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs"
                   onClick={onNext}
                   disabled={!onNext}
                   title="Next (→)"
                 >
-                  <ChevronRight className="size-4" />
+                  Next
+                  <ChevronRight className="size-3.5 ml-1" />
                 </Button>
               </div>
             </div>
@@ -346,7 +339,7 @@ export function LeadDetailSheet({
             </div>
             <Button
               onClick={save}
-              disabled={!dirty || saving}
+              disabled={saving}
               size="sm"
               className="bg-gradient-primary h-9"
             >
