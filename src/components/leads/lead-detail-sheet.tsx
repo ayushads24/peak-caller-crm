@@ -589,14 +589,14 @@ export function LeadDetailSheet({
                   onChange={(e) => setTaskTitle(e.target.value)}
                   placeholder="Task title"
                 />
-                <div className="flex flex-wrap gap-2">
-                  <Input
-                    type="datetime-local"
-                    value={taskDue}
-                    onChange={(e) => setTaskDue(e.target.value)}
-                    className="flex-1 min-w-[140px]"
-                  />
-                  <Select
+                 <div className="flex flex-wrap gap-2">
+                   <Input
+                     type="datetime-local"
+                     value={taskDue}
+                     onChange={(e) => setTaskDue(e.target.value)}
+                     className="flex-1 min-w-[220px]"
+                   />
+                   <Select
                     value={taskAssignee || "__me"}
                     onValueChange={(v) => setTaskAssignee(v === "__me" ? "" : v)}
                   >
