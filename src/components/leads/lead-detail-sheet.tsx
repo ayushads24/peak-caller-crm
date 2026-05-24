@@ -113,6 +113,30 @@ export function LeadDetailSheet({
   const [taskAssignee, setTaskAssignee] = useState<string>("");
   const [edit, setEdit] = useState<LeadRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const save = useCallback(async () => {
+    if (!edit) return;
+    setSaving(true);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        client_name: edit.client_name,
+        email: edit.email,
+        phone: edit.phone,
+        sales_value: edit.sales_value,
+        lead_source: edit.lead_source,
+        status_id: edit.status_id,
+        assigned_to: edit.assigned_to ?? null,
+      })
+      .eq("id", edit.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Lead updated");
+    onChanged();
+    void loadRelated(edit.id);
+  }, [edit, onChanged]);
 
   useEffect(() => {
     setEdit(lead);
