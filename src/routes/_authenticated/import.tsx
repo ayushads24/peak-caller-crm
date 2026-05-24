@@ -382,6 +382,9 @@ function ImportPage() {
       if (existingPhones.has(phone) || seen.has(phone)) { duplicates++; return; }
       seen.add(phone);
       const createdAt = parseFlexibleDate(r.created_at);
+      if (r.created_at && !createdAt) {
+        errors.push({ row: i + 2, reason: `Created On parse नहीं हुआ: ${String(r.created_at)}` });
+      }
       const followUp = parseFlexibleDate(r.follow_up);
       const taskDue = parseFlexibleDate(r.task_due_date);
       const salesRaw = r.sales_value;
