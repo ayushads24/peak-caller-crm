@@ -439,6 +439,7 @@ export function LeadDetailSheet({
               <Input
                 value={edit.lead_source ?? ""}
                 onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })}
+                onBlur={save}
               />
             </Field>
               </div>
