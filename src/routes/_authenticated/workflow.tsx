@@ -85,19 +85,33 @@ function Page() {
     if (!flow) { setFlowId(null); setItems([]); setLeadsMap(new Map()); setLoading(false); return; }
     setFlowId(flow.id);
 
-    const [{ data: its }, { data: sts }, _b] = await Promise.all([
+    const [{ data: its }, { data: sts }, { data: lbls }, { data: profs }, _b] = await Promise.all([
       supabase.from("calling_flow_items").select("id, lead_id, category, priority, attempts_planned, attempts_done, status").eq("flow_id", flow.id).order("priority"),
-      supabase.from("statuses").select("id, name, color").order("sort_order"),
+      supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
+      supabase.from("labels").select("id, name, color"),
+      supabase.from("profiles").select("id, full_name, email"),
       loadBreak(),
     ]);
     setItems((its ?? []) as Item[]);
     setStatuses((sts ?? []) as Status[]);
+    setFullStatuses((sts ?? []) as StatusRow[]);
+    setLabels((lbls ?? []) as LabelRow[]);
+    setProfiles((profs ?? []) as ProfileLite[]);
 
     const ids = (its ?? []).map((i) => i.lead_id);
     if (ids.length) {
-      const { data: leads } = await supabase.from("leads").select("id, client_name, phone, email, status_id, sales_value, lead_source").in("id", ids);
+      const { data: leads } = await supabase.from("leads").select("id, client_name, phone, email, status_id, sales_value, lead_source, created_at, assigned_to, created_by").in("id", ids);
       setLeadsMap(new Map((leads ?? []).map((l) => [l.id, l as Lead])));
-    } else setLeadsMap(new Map());
+      // Tasks due today or earlier, still open
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const { data: dueTasks } = await supabase
+        .from("tasks")
+        .select("lead_id")
+        .in("lead_id", ids)
+        .neq("status", "completed")
+        .lte("due_date", todayEnd.toISOString());
+      setDueTaskLeadIds(new Set((dueTasks ?? []).map((t) => t.lead_id as string)));
+    } else { setLeadsMap(new Map()); setDueTaskLeadIds(new Set()); }
     setLoading(false);
   }
 
@@ -111,6 +125,23 @@ function Page() {
     skipped: items.filter((i) => i.status === "skipped").length,
     pending: queue.length,
   }), [items, queue.length]);
+
+  function leadTag(l: Lead | undefined): "new" | "task" | null {
+    if (!l) return null;
+    if (dueTaskLeadIds.has(l.id)) return "task";
+    const ageH = (Date.now() - new Date(l.created_at).getTime()) / 36e5;
+    if (ageH <= 24) return "new";
+    return null;
+  }
+
+  function openDetail(l: Lead) {
+    setDetailLead({
+      id: l.id, client_name: l.client_name, email: l.email, phone: l.phone,
+      sales_value: l.sales_value, lead_source: l.lead_source, status_id: l.status_id,
+      created_at: l.created_at, assigned_to: l.assigned_to ?? null, created_by: l.created_by ?? null,
+    });
+    setDetailOpen(true);
+  }
 
   async function startCall() {
     if (!current || !currentLead) return;
@@ -153,6 +184,23 @@ function Page() {
     if (!activeBreak) return;
     await supabase.from("breaks").update({ ended_at: new Date().toISOString() }).eq("id", activeBreak.id);
   }
+
+  // Auto-mode: when current lead changes and auto is running, trigger call
+  useEffect(() => {
+    if (autoMode !== "running" || activeBreak || postOpen || !current || !currentLead) return;
+    if (lastAutoCalledItemId.current === current.id) return;
+    lastAutoCalledItemId.current = current.id;
+    const t = setTimeout(() => { void startCall(); }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoMode, activeBreak, postOpen, current?.id]);
+
+  function toggleAuto() {
+    if (autoMode === "off") { flowStartedAt.current = Date.now(); setAutoMode("running"); toast.success("Auto-calling started"); }
+    else if (autoMode === "running") { setAutoMode("paused"); toast.message("Auto-calling paused"); }
+    else if (autoMode === "paused") { setAutoMode("running"); toast.success("Auto-calling resumed"); }
+  }
+  function endAuto() { setAutoMode("off"); lastAutoCalledItemId.current = null; toast.message("Auto-calling stopped"); }
 
   if (loading) {
     return <div className="min-h-[60vh] grid place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>;
