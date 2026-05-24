@@ -125,16 +125,22 @@ function parseFlexibleDate(v: unknown): Date | null {
     "MM/dd/yyyy", "M/d/yyyy",
     "yyyy-MM-dd", "yyyy/MM/dd",
     "dd/MM/yyyy HH:mm", "dd-MM-yyyy HH:mm",
+    "dd/MM/yyyy HH:mm:ss", "d/M/yyyy HH:mm:ss", "dd-MM-yyyy HH:mm:ss", "d-M-yyyy HH:mm:ss",
     "yyyy-MM-dd HH:mm:ss",
     // 2-digit year
     "dd/MM/yy", "d/M/yy", "dd-MM-yy", "d-M-yy",
+    "dd/MM/yy HH:mm:ss", "d/M/yy HH:mm:ss", "dd-MM-yy HH:mm:ss", "d-M-yy HH:mm:ss",
     // 12-hour AM/PM
     "dd/MM/yyyy h:mm a", "dd-MM-yyyy h:mm a",
     "dd/MM/yyyy hh:mm a", "yyyy-MM-dd h:mm a",
+    "dd/MM/yyyy h:mm:ss a", "dd-MM-yyyy h:mm:ss a",
+    "dd/MM/yyyy hh:mm:ss a", "yyyy-MM-dd h:mm:ss a",
     // month-name formats
     "dd MMM yyyy", "d MMM yyyy", "dd-MMM-yyyy", "d-MMM-yyyy",
     "dd MMM yyyy HH:mm", "d MMM yyyy HH:mm",
+    "dd MMM yyyy HH:mm:ss", "d MMM yyyy HH:mm:ss",
     "dd MMM yyyy h:mm a", "d MMM yyyy h:mm a",
+    "dd MMM yyyy h:mm:ss a", "d MMM yyyy h:mm:ss a",
     "dd MMMM yyyy", "d MMMM yyyy",
     "MMM d, yyyy", "MMMM d, yyyy",
     "MMM d yyyy", "MMMM d yyyy",
