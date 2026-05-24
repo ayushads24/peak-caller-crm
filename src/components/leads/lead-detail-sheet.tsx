@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -113,6 +113,30 @@ export function LeadDetailSheet({
   const [taskAssignee, setTaskAssignee] = useState<string>("");
   const [edit, setEdit] = useState<LeadRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const save = useCallback(async () => {
+    if (!edit) return;
+    setSaving(true);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        client_name: edit.client_name,
+        email: edit.email,
+        phone: edit.phone,
+        sales_value: edit.sales_value,
+        lead_source: edit.lead_source,
+        status_id: edit.status_id,
+        assigned_to: edit.assigned_to ?? null,
+      })
+      .eq("id", edit.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("Lead updated");
+    onChanged();
+    void loadRelated(edit.id);
+  }, [edit, onChanged]);
 
   useEffect(() => {
     setEdit(lead);
@@ -158,27 +182,34 @@ export function LeadDetailSheet({
 
   if (!lead || !edit) return null;
 
-  async function save() {
-    if (!edit) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        client_name: edit.client_name,
-        email: edit.email,
-        phone: edit.phone,
-        sales_value: edit.sales_value,
-        lead_source: edit.lead_source,
-        status_id: edit.status_id,
-        assigned_to: edit.assigned_to ?? null,
-      })
-      .eq("id", edit.id);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Lead updated");
-    onChanged();
-    void loadRelated(edit.id);
-  }
+  /* Auto-save when edit diverges from lead */
+  useEffect(() => {
+    if (!edit || !lead) return;
+    const changed =
+      edit.client_name !== lead.client_name ||
+      edit.email !== lead.email ||
+      edit.phone !== lead.phone ||
+      edit.sales_value !== lead.sales_value ||
+      edit.lead_source !== lead.lead_source ||
+      edit.status_id !== lead.status_id ||
+      edit.assigned_to !== lead.assigned_to;
+    if (!changed) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void save();
+    }, 1200);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [edit, lead, save]);
+
+  /* Flush pending auto-save when sheet closes */
+  useEffect(() => {
+    if (!open && saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, [open]);
 
   async function addNote() {
     if (!noteText.trim() || !user) return;
@@ -314,7 +345,7 @@ export function LeadDetailSheet({
             </div>
           </SheetTitle>
 
-          {/* Quick actions + save row */}
+          {/* Quick actions row */}
           <div className="flex items-center gap-2">
             <div className="grid grid-cols-3 gap-1.5 flex-1">
               <QuickAction
@@ -337,15 +368,11 @@ export function LeadDetailSheet({
                 tone="text-indigo-600"
               />
             </div>
-            <Button
-              onClick={save}
-              disabled={saving}
-              size="sm"
-              className="bg-gradient-primary h-9"
-            >
-              <Check className="size-4 mr-1" />
-              {saving ? "Saving…" : "Save"}
-            </Button>
+            {saving && (
+              <span className="text-[10px] text-muted-foreground animate-pulse">
+                Saving…
+              </span>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9">
@@ -375,18 +402,21 @@ export function LeadDetailSheet({
               <Input
                 value={edit.client_name}
                 onChange={(e) => setEdit({ ...edit, client_name: e.target.value })}
+                onBlur={save}
               />
             </Field>
             <Field label="Email">
               <Input
                 value={edit.email ?? ""}
                 onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+                onBlur={save}
               />
             </Field>
             <Field label="Phone">
               <Input
                 value={edit.phone ?? ""}
                 onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
+                onBlur={save}
               />
             </Field>
               </div>
@@ -409,6 +439,7 @@ export function LeadDetailSheet({
                       sales_value: e.target.value === "" ? null : Number(e.target.value),
                     })
                   }
+                  onBlur={save}
                 />
               </div>
             </Field>
@@ -416,6 +447,7 @@ export function LeadDetailSheet({
               <Input
                 value={edit.lead_source ?? ""}
                 onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })}
+                onBlur={save}
               />
             </Field>
               </div>
