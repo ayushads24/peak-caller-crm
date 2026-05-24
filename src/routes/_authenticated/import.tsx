@@ -618,8 +618,12 @@ function ImportPage() {
                 <Badge className="bg-amber-500/15 text-amber-700 border-0">{validation.dupExisting} existing duplicates</Badge>
                 <Badge className="bg-amber-500/15 text-amber-700 border-0">{validation.dupInFile} in-file duplicates</Badge>
                 <Badge className="bg-red-500/15 text-red-700 border-0"><AlertTriangle className="size-3 mr-1" />{validation.missingRequired} missing required</Badge>
+                <Badge className="bg-red-500/15 text-red-700 border-0"><AlertTriangle className="size-3 mr-1" />{validation.badCreatedDate} bad created dates</Badge>
               </div>
             </div>
+            {!validation.hasCreatedDateMapping && (
+              <p className="mb-3 text-xs font-medium text-red-600">Created Date / Created On mapping mandatory hai. Iske bina import disable rahega.</p>
+            )}
             <div className="overflow-auto rounded-lg border max-h-96">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50 text-muted-foreground uppercase tracking-wider sticky top-0">
@@ -632,7 +636,8 @@ function ImportPage() {
                     const phone = normalizePhone(r.phone);
                     const name = String(r.client_name ?? "").trim();
                     const isDup = phone && existingPhones.has(phone);
-                    const missing = !name || !phone;
+                    const badCreatedDate = !r.created_at || !createdAt;
+                    const missing = !name || !phone || badCreatedDate;
                     const createdAt = parseFlexibleDate(r.created_at);
                     return (
                       <tr key={i} className={`border-t ${missing ? "bg-red-500/5" : isDup ? "bg-amber-500/5" : ""}`}>
