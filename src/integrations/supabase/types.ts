@@ -576,6 +576,7 @@ export type Database = {
           due_date: string | null
           id: string
           lead_id: string
+          priority: Database["public"]["Enums"]["task_priority"]
           status: Database["public"]["Enums"]["task_status"]
           title: string
         }
@@ -588,6 +589,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id: string
+          priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
           title: string
         }
@@ -600,6 +602,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id?: string
+          priority?: Database["public"]["Enums"]["task_priority"]
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
         }
@@ -768,6 +771,7 @@ export type Database = {
         | "rescheduled"
       flow_status: "active" | "paused" | "completed"
       meeting_status: "scheduled" | "completed" | "cancelled" | "rescheduled"
+      task_priority: "low" | "medium" | "high"
       task_status: "pending" | "in_progress" | "completed"
     }
     CompositeTypes: {
@@ -939,6 +943,7 @@ export const Constants = {
       ],
       flow_status: ["active", "paused", "completed"],
       meeting_status: ["scheduled", "completed", "cancelled", "rescheduled"],
+      task_priority: ["low", "medium", "high"],
       task_status: ["pending", "in_progress", "completed"],
     },
   },
