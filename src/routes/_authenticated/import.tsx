@@ -195,7 +195,7 @@ function ImportPage() {
       supabase.from("statuses").select("id, name").order("sort_order"),
       supabase.from("leads").select("phone").not("phone", "is", null),
       supabase.from("import_batches").select("*").order("created_at", { ascending: false }).limit(10),
-      supabase.from("profiles").select("id, full_name, email"),
+      (supabase as any).from("profiles_directory").select("id, full_name, email"),
       supabase.from("labels").select("id, name"),
     ]);
     setStatuses((s.data ?? []) as { id: string; name: string }[]);

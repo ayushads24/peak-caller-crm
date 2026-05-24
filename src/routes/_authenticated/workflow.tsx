@@ -89,7 +89,7 @@ function Page() {
       supabase.from("calling_flow_items").select("id, lead_id, category, priority, attempts_planned, attempts_done, status").eq("flow_id", flow.id).order("priority"),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color"),
-      supabase.from("profiles").select("id, full_name, email"),
+      (supabase as any).from("profiles_directory").select("id, full_name, email"),
       loadBreak(),
     ]);
     setItems((its ?? []) as Item[]);
