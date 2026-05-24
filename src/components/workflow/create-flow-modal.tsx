@@ -240,7 +240,12 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
           <DialogTitle className="font-display text-xl">
             {targetUserName ? `Create Workflow for ${targetUserName}` : "Create Today's Workflow"}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.</p>
+          <p className="text-sm text-muted-foreground">
+            Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.
+            {targetUserName && (
+              <> Showing only leads assigned to <span className="font-medium text-foreground">{targetUserName}</span>.</>
+            )}
+          </p>
         </DialogHeader>
         <div className="space-y-3 mt-2">
           {loadingStatuses && cats.length === 0 && (
