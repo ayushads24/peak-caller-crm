@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw } from "lucide-react";
+import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw, Sparkles, AlarmClock, StopCircle, Eye } from "lucide-react";
 import { CreateFlowModal, type FlowCategory } from "@/components/workflow/create-flow-modal";
 import { PostCallSheet } from "@/components/workflow/post-call-sheet";
+import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow, type ProfileLite } from "@/components/leads/lead-detail-sheet";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -18,7 +19,7 @@ interface Item {
   id: string; lead_id: string; category: FlowCategory; priority: number;
   attempts_planned: number; attempts_done: number; status: "pending" | "in_progress" | "done" | "skipped" | "rescheduled";
 }
-interface Lead { id: string; client_name: string; phone: string | null; email: string | null; status_id: string | null; sales_value: number | null; lead_source: string | null; }
+interface Lead { id: string; client_name: string; phone: string | null; email: string | null; status_id: string | null; sales_value: number | null; lead_source: string | null; created_at: string; assigned_to?: string | null; created_by?: string | null; }
 interface Status { id: string; name: string; color: string; }
 interface Brk { id: string; type: "lunch" | "tea" | "meeting" | "other"; started_at: string; ended_at: string | null; }
 
@@ -42,6 +43,15 @@ function Page() {
   const [postLead, setPostLead] = useState<Lead | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [autoMode, setAutoMode] = useState<"off" | "running" | "paused">("off");
+  const [dueTaskLeadIds, setDueTaskLeadIds] = useState<Set<string>>(new Set());
+  const [labels, setLabels] = useState<LabelRow[]>([]);
+  const [fullStatuses, setFullStatuses] = useState<StatusRow[]>([]);
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+  const [detailLead, setDetailLead] = useState<LeadRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const lastAutoCalledItemId = useRef<string | null>(null);
+  const flowStartedAt = useRef<number>(Date.now());
 
   useEffect(() => { if (user) void load(); }, [user]);
 
@@ -50,6 +60,13 @@ function Page() {
     const ch = supabase.channel("workflow-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "calling_flow_items" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "breaks", filter: `user_id=eq.${user.id}` }, () => loadBreak())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, (payload) => {
+        const row = payload.new as { id: string; client_name: string; created_at: string };
+        if (row?.created_at && new Date(row.created_at).getTime() >= flowStartedAt.current) {
+          toast.success(`New fresh lead: ${row.client_name}`, { icon: "✨" });
+        }
+        void load();
+      })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [user]);
