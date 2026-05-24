@@ -134,6 +134,26 @@ function parseFlexibleDate(v: unknown): Date | null {
   return null;
 }
 
+function buildCombinedNotes(r: Record<string, unknown>): string | undefined {
+  const parts: string[] = [];
+  if (r.notes) parts.push(String(r.notes).trim());
+  const extras: Array<[string, string]> = [
+    ["Alt Phone", "extra_alt_phone"],
+    ["City", "extra_city"],
+    ["FB Ad", "extra_fb_ad"],
+    ["FB Campaign", "extra_fb_campaign"],
+    ["Capture Frequency", "extra_capture_freq"],
+    ["External Lead ID", "extra_lead_id"],
+    ["Batch", "extra_batch"],
+  ];
+  for (const [label, key] of extras) {
+    const v = r[key];
+    if (v != null && String(v).trim() !== "") parts.push(`${label}: ${String(v).trim()}`);
+  }
+  const out = parts.filter(Boolean).join("\n");
+  return out || undefined;
+}
+
 function ImportPage() {
   const { user, permissions, roles } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
