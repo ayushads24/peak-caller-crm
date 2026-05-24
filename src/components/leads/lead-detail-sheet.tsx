@@ -394,6 +394,7 @@ export function LeadDetailSheet({
               <Input
                 value={edit.client_name}
                 onChange={(e) => setEdit({ ...edit, client_name: e.target.value })}
+                onBlur={save}
               />
             </Field>
             <Field label="Email">
