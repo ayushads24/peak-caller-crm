@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw, Sparkles, AlarmClock, StopCircle, Eye } from "lucide-react";
+import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw, AlarmClock, StopCircle, Eye } from "lucide-react";
 import { CreateFlowModal, type FlowCategory } from "@/components/workflow/create-flow-modal";
 import { PostCallSheet } from "@/components/workflow/post-call-sheet";
 import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow, type ProfileLite } from "@/components/leads/lead-detail-sheet";
