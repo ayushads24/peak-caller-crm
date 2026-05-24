@@ -312,6 +312,7 @@ export type Database = {
           created_by: string | null
           email: string | null
           id: string
+          imported_at: string | null
           lead_source: string | null
           phone: string | null
           sales_value: number | null
@@ -326,6 +327,7 @@ export type Database = {
           created_by?: string | null
           email?: string | null
           id?: string
+          imported_at?: string | null
           lead_source?: string | null
           phone?: string | null
           sales_value?: number | null
@@ -340,6 +342,7 @@ export type Database = {
           created_by?: string | null
           email?: string | null
           id?: string
+          imported_at?: string | null
           lead_source?: string | null
           phone?: string | null
           sales_value?: number | null
