@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/my-tasks")({ component: Page });
 
 type Priority = "low" | "medium" | "high";
-type Status = "pending" | "in_progress" | "completed" | "cancelled";
+type Status = "pending" | "in_progress" | "completed";
 
 interface TaskRow {
   id: string;
@@ -80,7 +80,6 @@ const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string
 
 function bucketOf(t: TaskRow): FilterKey | null {
   if (t.status === "completed") return "completed";
-  if (t.status === "cancelled") return null;
   if (!t.due_date) return "upcoming";
   const d = new Date(t.due_date);
   if (isToday(d)) return "today";
@@ -168,7 +167,6 @@ function Page() {
     const m = new Map<string, TaskRow[]>();
     for (const t of tasks) {
       if (!t.due_date) continue;
-      if (t.status === "cancelled") continue;
       const key = format(new Date(t.due_date), "yyyy-MM-dd");
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(t);
