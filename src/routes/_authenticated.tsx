@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
@@ -48,6 +48,13 @@ function Layout() {
     const teamItem = { to: "/team-workflows", icon: ListChecks, label: "Team Workflows" };
     if (wfIdx >= 0) navItems.splice(wfIdx + 1, 0, teamItem);
     else navItems.push(teamItem);
+  }
+  const canDistribute = isAdmin(roles) || roles.includes("manager") || roles.includes("team_leader") || hasPermission(permissions, "leads.distribute");
+  if (canDistribute) {
+    const leadsIdx = navItems.findIndex((i) => i.to === "/leads");
+    const item = { to: "/lead-distribution", icon: Share2, label: "Distribution" };
+    if (leadsIdx >= 0) navItems.splice(leadsIdx + 1, 0, item);
+    else navItems.push(item);
   }
 
   return (
