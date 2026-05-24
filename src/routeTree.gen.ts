@@ -19,6 +19,7 @@ import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedTeamWorkflowsRouteImport } from './routes/_authenticated/team-workflows'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedMyTasksRouteImport } from './routes/_authenticated/my-tasks'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
@@ -76,6 +77,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedMyTasksRoute = AuthenticatedMyTasksRouteImport.update({
+  id: '/my-tasks',
+  path: '/my-tasks',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/import': typeof AuthenticatedImportRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
+  '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/import': typeof AuthenticatedImportRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
+  '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
+  '/_authenticated/my-tasks': typeof AuthenticatedMyTasksRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/integrations'
     | '/leads'
+    | '/my-tasks'
     | '/settings'
     | '/team-workflows'
     | '/users'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/integrations'
     | '/leads'
+    | '/my-tasks'
     | '/settings'
     | '/team-workflows'
     | '/users'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/_authenticated/import'
     | '/_authenticated/integrations'
     | '/_authenticated/leads'
+    | '/_authenticated/my-tasks'
     | '/_authenticated/settings'
     | '/_authenticated/team-workflows'
     | '/_authenticated/users'
@@ -301,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/my-tasks': {
+      id: '/_authenticated/my-tasks'
+      path: '/my-tasks'
+      fullPath: '/my-tasks'
+      preLoaderRoute: typeof AuthenticatedMyTasksRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/leads': {
       id: '/_authenticated/leads'
       path: '/leads'
@@ -351,6 +370,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
+  AuthenticatedMyTasksRoute: typeof AuthenticatedMyTasksRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTeamWorkflowsRoute: typeof AuthenticatedTeamWorkflowsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
@@ -362,6 +382,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
+  AuthenticatedMyTasksRoute: AuthenticatedMyTasksRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTeamWorkflowsRoute: AuthenticatedTeamWorkflowsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
