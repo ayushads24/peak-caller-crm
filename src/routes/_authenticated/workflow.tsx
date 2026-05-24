@@ -143,6 +143,14 @@ function Page() {
     setDetailOpen(true);
   }
 
+  function openNextDetail() {
+    if (!detailLead) return;
+    const idx = queue.findIndex((i) => i.lead_id === detailLead.id);
+    const nextItem = idx >= 0 ? queue[idx + 1] : undefined;
+    const nextLead = nextItem ? leadsMap.get(nextItem.lead_id) : undefined;
+    if (nextLead) openDetail(nextLead);
+  }
+
   async function startCall() {
     if (!current || !currentLead) return;
     if (currentLead.phone) window.location.href = `tel:${currentLead.phone}`;
@@ -392,6 +400,7 @@ function Page() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onChanged={() => load()}
+        onNext={detailLead && queue.some((i, idx) => i.lead_id === detailLead.id && idx < queue.length - 1) ? openNextDetail : undefined}
       />
     </div>
   );
