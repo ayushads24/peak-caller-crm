@@ -268,6 +268,14 @@ function Page() {
     if (nextLead) openDetail(nextLead);
   }
 
+  function openPrevDetail() {
+    if (!detailLead) return;
+    const idx = queue.findIndex((i) => i.lead_id === detailLead.id);
+    const prevItem = idx > 0 ? queue[idx - 1] : undefined;
+    const prevLead = prevItem ? leadsMap.get(prevItem.lead_id) : undefined;
+    if (prevLead) openDetail(prevLead);
+  }
+
   async function startCall() {
     if (!current || !currentLead) return;
     if (currentLead.phone) window.location.href = `tel:${currentLead.phone}`;
@@ -732,6 +740,11 @@ function Page() {
           detailLead &&
           queue.some((i, idx) => i.lead_id === detailLead.id && idx < queue.length - 1)
             ? openNextDetail
+            : undefined
+        }
+        onPrev={
+          detailLead && queue.findIndex((i) => i.lead_id === detailLead.id) > 0
+            ? openPrevDetail
             : undefined
         }
       />
