@@ -1,58 +1,68 @@
 
-This is a large, multi-week feature. I'll break it into phases so you can review and approve each one before I move on. Phase 1 is the foundation; Phases 2–4 layer on automation and team features.
+## Goal
 
-## Phase 1 — Calling Flow Foundation (build first)
+Tumhari Excel ke exact column names (Status, Assignee name, Name, Phone, Email, Alternate Phone, Lead Source, BUDGET, City, Facebook ad, Facebook Campaign, Created On, Modified On, Capture Frequency, Captured On, Lead id, Batch Names) automatically sahi field pe map ho jayein, aur **Created On** ki date se CRM ke Leads page pe filter kar sako.
 
-**Backend (new tables)**
-- `calling_flows` — one row per user per day (name, created_at, user_id, work_date, status: active/completed)
-- `calling_flow_items` — leads queued inside a flow (flow_id, lead_id, category, priority, attempts_planned, attempts_done, status: pending/in_progress/done/skipped)
-- `breaks` — break tracking (user_id, type: lunch/tea/meeting/other, started_at, ended_at)
-- Add `current_lead_id`, `current_call_started_at` to `attendance` for "where am I in the flow" state
-- RLS: user sees only their own flows + breaks; admin/manager see all
+---
 
-**UI**
-- After punch-in → "Create Today's Calling Flow" modal
-  - Add categories: Fresh / Interested in Meeting / Quotation Sent / Follow-up
-  - Per category: date range, attempts/day (1–3), priority order (drag handle)
-  - "Start flow" builds the queue from leads matching each category's status + date filter
-- Active flow screen at `/calling` (the day's queue)
-  - Current lead card (big call button, lead info, prev attempts)
-  - Attempt counter (1/2/3) + actions: Complete Today Attempt / Mark as Done / Skip Further Attempts
-  - Next-lead auto advance
-- Post-call action sheet (45 s timer)
-  - Status change, add note, create task, schedule meeting, WhatsApp link, "Next" / "+15 s"
-- Break controls (start/stop + type) — pauses the flow timer
-- Punch-out guard: if pending items > 0 → "Move to tomorrow / Reschedule / Ignore"
+## 1. Import page — auto-map ko smarter banayenge
 
-## Phase 2 — Team & Bulk (after Phase 1 approved)
+File: `src/routes/_authenticated/import.tsx`
 
-- Reassign lead (single + bulk), Assigned By / Assigned To filters on Leads page
-- Bulk select on Leads (checkbox column) with bulk Export / Status / Delete / Reassign / Add note
-- Permissions UI for who-sees-whose-leads (already enforced in RLS — just expose filters)
+**`autoGuess()` me regex update** taaki ye headers pakad le:
 
-## Phase 3 — Smart Automation
+| Excel column | Maps to |
+|---|---|
+| Status | `status` |
+| Assignee name | `assigned_to` |
+| Name | `client_name` |
+| Phone | `phone` |
+| Email | `email` |
+| Alternate Phone | `notes` (prefix `Alt Phone: …`) |
+| Lead Source | `lead_source` |
+| BUDGET | `sales_value` |
+| City | `notes` (prefix `City: …`) |
+| Facebook ad | `notes` (prefix `FB Ad: …`) |
+| Facebook Campaign | `notes` (prefix `FB Campaign: …`) |
+| **Created On** | `created_at` ✅ (leads.created_at is set from this) |
+| Modified On | skip (CRM khud manage karta hai) |
+| Capture Frequency | `notes` |
+| Captured On | skip (Created On already covers it) |
+| Lead id | `notes` (prefix `External ID: …`) |
+| Batch Names | `notes` (prefix `Batch: …`) |
 
-- Auto-sequential dialing: hitting "Call" on current lead opens `tel:` then auto-advances on post-call sheet completion
-- Scheduled follow-ups: a "Reschedule" creates a task with due time; tasks due today auto-merge into tomorrow's flow
-- Real-time presence (who is on a call) via Supabase Realtime
+Kyunki "notes" sirf ek hi column le sakta hai, hum ek nayi helper field `extra_notes` add karenge jo multiple secondary columns (Alt Phone, City, FB Ad/Campaign, Capture Frequency, Lead id, Batch Names) ko **combine karke ek notes entry** banayega per lead — labeled lines me, taaki sab info safe rahe aur lead detail me dikhe.
 
-## Phase 4 — Polish
+`created_at` waala flow already sahi hai (line 348–349) — lead row insert hote hi `created_at` Excel ki date set ho jata hai. Bas auto-guess miss kar raha tha "Created On" ko reliably.
 
-- Calling speed analytics (calls/hr, connect rate, avg post-call time) per user
-- Mobile-optimized calling screen
-- Sound/desktop notifications
+## 2. Leads page — Created Date filter UI wapas laana
 
-## Technical notes (for me)
+File: `src/components/leads/leads-filter-bar.tsx`
 
-- Browser tel: links — true auto-dial isn't possible in browsers without a softphone/Twilio. "Auto-call" = opens dialer + auto-advances UI after the post-call sheet. If you want real progressive dialing, we need Twilio Voice (paid, requires API key).
-- WhatsApp = open `https://wa.me/<phone>` in new tab (no API needed). Real WhatsApp Business API is a separate setup.
-- 45 s timer runs in client React state; persisted via `calls.duration_seconds` only after the user closes the sheet.
+`DateFilter` component already defined hai (line 256) aur leads page (`leads.tsx:157`) `dateFrom`/`dateTo` use bhi karta hai — bas toolbar row me button **render nahi ho raha**. Status/Label/Source ke saath ek `<DateFilter ... />` button add karenge with presets (Today, Last 7d, This month, Last month, custom range).
 
-## Open questions before I start Phase 1
+Iske baad imported leads ki original "Created On" date se filter karna ek click me ho jayega.
 
-1. **Calling categories** — fixed to the 4 you listed (Fresh / Interested in Meeting / Quotation Sent / Follow-up) or should they be admin-configurable?
-2. **Real auto-dial** — OK with browser `tel:` + auto-advance for now, and add Twilio later? Or want Twilio integration in Phase 1 (needs a paid Twilio account)?
-3. **WhatsApp** — `wa.me` link for now (free, opens app/web), or WhatsApp Business API (paid, requires Meta setup)?
-4. **Scope of Phase 1** — should I include the Break system in Phase 1, or push it to Phase 2 to ship faster?
+---
 
-Once you answer those, I'll build Phase 1 end-to-end.
+## Technical details
+
+- `autoGuess` regex me ye additions:
+  - `^status$` → status
+  - `assigneename|assignee` → assigned_to
+  - `^name$|^clientname$` → client_name
+  - `alternate|altphone|secondaryphone` → new `extra_note:alt_phone`
+  - `^budget$|^amount$` → sales_value
+  - `^city$|location` → `extra_note:city`
+  - `facebookad|fbad|adname` → `extra_note:fb_ad`
+  - `facebookcampaign|fbcampaign|campaignname` → `extra_note:fb_campaign`
+  - `createdon|^createddate$|^enquirydate$` → created_at
+  - `modifiedon|updatedon` → SKIP
+  - `capturefreq|capturefrequency` → `extra_note:capture_freq`
+  - `capturedon` → SKIP (Created On wins)
+  - `^leadid$|externalid` → `extra_note:lead_id`
+  - `batchname|batchnames` → `extra_note:batch`
+- New `FieldKey` variants for the 7 `extra_note:*` slots, all writing into a combined `notes` row per lead with `Label: value` lines, joined with `\n`. If user has also mapped a primary `notes` column, prepend it.
+- Filter bar: insert `<DateFilter filters={filters} onChange={onChange} />` between Source and AssignedFilter; no logic changes needed in `leads.tsx`.
+
+Confirm karo to build mode me jaake ye changes apply kar deta hoon.

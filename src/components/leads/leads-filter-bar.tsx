@@ -126,6 +126,8 @@ export function LeadsFilterBar({
 
         <AssignedFilter filters={filters} onChange={onChange} profiles={profiles} />
 
+        <DateFilter filters={filters} onChange={onChange} />
+
         <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
 
         <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)} disabled={count === 0} className="gap-1">
