@@ -366,12 +366,52 @@ function Page() {
 
         {/* Status movement */}
         <Card className="lg:col-span-2 p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold">Status movement</h3>
-            <span className="text-xs text-muted-foreground">Click a status to view leads</span>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-semibold flex items-center gap-2"><Filter className="size-4 text-primary" />Status movement</h3>
+            <span className="text-xs text-muted-foreground hidden sm:inline">Click a status to open filtered leads</span>
           </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-end gap-2 mb-4 p-3 rounded-lg bg-muted/40 border">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
+              <Input type="date" value={smFrom} onChange={(e) => setSmFrom(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
+              <Input type="date" value={smTo} onChange={(e) => setSmTo(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Month</label>
+              <Select onValueChange={(v) => applySmMonthPreset(v as "current" | "last" | "year" | "custom")}>
+                <SelectTrigger className="h-8 w-[150px]"><SelectValue placeholder="Preset" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current Month</SelectItem>
+                  <SelectItem value="last">Last Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isManager && (
+              <div className="min-w-[170px]">
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Team member</label>
+                <Select value={smAssigned} onValueChange={setSmAssigned}>
+                  <SelectTrigger className="h-8"><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All team members</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.full_name || p.email || p.id.slice(0, 8)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {statuses.map((s) => {
+            {smLoading && (smLeads === null) && Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+            {!smLoading && statuses.map((s) => {
               const count = (byStatus.get(s.id) ?? []).length;
               return (
                 <button key={s.id} onClick={() => openStatusLeads(s)} className="group flex items-center justify-between rounded-lg border bg-card p-3 hover:border-primary/50 hover:shadow-sm transition-all text-left">
@@ -390,22 +430,6 @@ function Page() {
           </div>
         </Card>
       </div>
-
-      {/* Status leads drawer */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader><SheetTitle className="font-display">{drawerTitle}</SheetTitle></SheetHeader>
-          <div className="mt-4 space-y-2">
-            {drawerLeads.length === 0 && <p className="text-sm text-muted-foreground">No leads in this status.</p>}
-            {drawerLeads.map((l) => (
-              <button key={l.id} onClick={() => { setDrawerOpen(false); navigate({ to: "/leads" }); }} className="w-full text-left rounded-lg border p-3 hover:border-primary/50 transition-colors">
-                <p className="font-medium text-sm">{l.client_name}</p>
-                <p className="text-[11px] text-muted-foreground">Created {formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}{l.sales_value ? ` · ₹${Number(l.sales_value).toLocaleString("en-IN")}` : ""}</p>
-              </button>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Tasks drawer */}
       <Sheet open={tasksOpen} onOpenChange={setTasksOpen}>
