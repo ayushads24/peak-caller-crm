@@ -126,6 +126,19 @@ function parseFlexibleDate(v: unknown): Date | null {
     "yyyy-MM-dd", "yyyy/MM/dd",
     "dd/MM/yyyy HH:mm", "dd-MM-yyyy HH:mm",
     "yyyy-MM-dd HH:mm:ss",
+    // 2-digit year
+    "dd/MM/yy", "d/M/yy", "dd-MM-yy", "d-M-yy",
+    // 12-hour AM/PM
+    "dd/MM/yyyy h:mm a", "dd-MM-yyyy h:mm a",
+    "dd/MM/yyyy hh:mm a", "yyyy-MM-dd h:mm a",
+    // month-name formats
+    "dd MMM yyyy", "d MMM yyyy", "dd-MMM-yyyy", "d-MMM-yyyy",
+    "dd MMM yyyy HH:mm", "d MMM yyyy HH:mm",
+    "dd MMM yyyy h:mm a", "d MMM yyyy h:mm a",
+    "dd MMMM yyyy", "d MMMM yyyy",
+    "MMM d, yyyy", "MMMM d, yyyy",
+    "MMM d yyyy", "MMMM d yyyy",
+    "MMM d, yyyy h:mm a", "MMMM d, yyyy h:mm a",
   ];
   for (const f of formats) {
     const d = parseDate(s, f, new Date());
