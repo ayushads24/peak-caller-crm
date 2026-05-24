@@ -39,7 +39,6 @@ function Page() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 40;
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { void load(); }, []);
   useEffect(() => {
