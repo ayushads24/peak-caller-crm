@@ -17,6 +17,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticated/workflow'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedTeamWorkflowsRouteImport } from './routes/_authenticated/team-workflows'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
@@ -64,6 +65,12 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedTeamWorkflowsRoute =
+  AuthenticatedTeamWorkflowsRouteImport.update({
+    id: '/team-workflows',
+    path: '/team-workflows',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -114,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
@@ -130,6 +138,7 @@ export interface FileRoutesByTo {
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
@@ -148,6 +157,7 @@ export interface FileRoutesById {
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/leads'
     | '/settings'
+    | '/team-workflows'
     | '/users'
     | '/workflow'
     | '/api/public/webhook/doubletick'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '/integrations'
     | '/leads'
     | '/settings'
+    | '/team-workflows'
     | '/users'
     | '/workflow'
     | '/api/public/webhook/doubletick'
@@ -199,6 +211,7 @@ export interface FileRouteTypes {
     | '/_authenticated/integrations'
     | '/_authenticated/leads'
     | '/_authenticated/settings'
+    | '/_authenticated/team-workflows'
     | '/_authenticated/users'
     | '/_authenticated/workflow'
     | '/api/public/webhook/doubletick'
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/team-workflows': {
+      id: '/_authenticated/team-workflows'
+      path: '/team-workflows'
+      fullPath: '/team-workflows'
+      preLoaderRoute: typeof AuthenticatedTeamWorkflowsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -332,6 +352,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTeamWorkflowsRoute: typeof AuthenticatedTeamWorkflowsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWorkflowRoute: typeof AuthenticatedWorkflowRoute
 }
@@ -342,6 +363,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTeamWorkflowsRoute: AuthenticatedTeamWorkflowsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWorkflowRoute: AuthenticatedWorkflowRoute,
 }

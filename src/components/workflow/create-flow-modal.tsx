@@ -47,7 +47,7 @@ function iconFor(cat: FlowCategory) {
   return RotateCw;
 }
 
-export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: (flowId: string) => void }) {
+export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, targetUserName }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: (flowId: string) => void; targetUserId?: string; targetUserName?: string }) {
   const { user } = useAuth();
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [cats, setCats] = useState<CategoryConfig[]>([]);
@@ -173,6 +173,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
 
   async function start() {
     if (!user) return;
+    const ownerId = targetUserId ?? user.id;
     const enabled = cats.filter((c) => c.enabled);
     if (enabled.length === 0) return toast.error("Select at least one category");
     setBusy(true);
@@ -213,8 +214,8 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
     // Replace existing flow for today
     const workDate = format(new Date(), "yyyy-MM-dd");
     const flowName = `Workflow — ${format(new Date(), "MMM d, yyyy")}`;
-    await supabase.from("calling_flows").delete().eq("user_id", user.id).eq("work_date", workDate);
-    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: user.id, work_date: workDate, status: "active", name: flowName }).select("id").single();
+    await supabase.from("calling_flows").delete().eq("user_id", ownerId).eq("work_date", workDate);
+    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: ownerId, work_date: workDate, status: "active", name: flowName }).select("id").single();
     if (error || !flow) { setBusy(false); return toast.error(error?.message ?? "Failed"); }
 
     const rows = queue.map((q) => ({ flow_id: flow.id, ...q }));
@@ -230,7 +231,9 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Create Today's Workflow</DialogTitle>
+          <DialogTitle className="font-display text-xl">
+            {targetUserName ? `Create Workflow for ${targetUserName}` : "Create Today's Workflow"}
+          </DialogTitle>
           <p className="text-sm text-muted-foreground">Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.</p>
         </DialogHeader>
         <div className="space-y-3 mt-2">

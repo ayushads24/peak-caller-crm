@@ -697,6 +697,10 @@ export type Database = {
         Args: { _lead_id: string; _user_id: string }
         Returns: boolean
       }
+      can_manage_user_workflow: {
+        Args: { _actor: string; _target: string }
+        Returns: boolean
+      }
       has_permission: {
         Args: { _key: string; _user_id: string }
         Returns: boolean

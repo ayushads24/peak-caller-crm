@@ -1,9 +1,9 @@
 import { createFileRoute, Outlet, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useAuth, isAdmin, hasPermission } from "@/hooks/use-auth";
+import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
@@ -39,7 +39,15 @@ function Layout() {
     { to: "/users",     icon: UserCog,         label: "Users",     perm: "users.view" },
     { to: "/settings",  icon: Settings,        label: "Settings",  perm: "settings.view" },
   ] as const;
-  const navItems = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
+  const baseNav = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
+  const canManageTeamFlows = isAdminOrManager(roles) || roles.includes("team_leader");
+  const navItems: { to: string; icon: typeof LayoutDashboard; label: string }[] = [...baseNav];
+  if (canManageTeamFlows) {
+    const wfIdx = navItems.findIndex((i) => i.to === "/workflow");
+    const teamItem = { to: "/team-workflows", icon: ListChecks, label: "Team Workflows" };
+    if (wfIdx >= 0) navItems.splice(wfIdx + 1, 0, teamItem);
+    else navItems.push(teamItem);
+  }
 
   return (
     <div className="min-h-screen flex bg-background">
