@@ -127,17 +127,18 @@ export const saveDistributionRule = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertCanManage(context.userId, data.team_id);
+    const cfgJson = data.config as unknown as Record<string, never>;
     if (data.id) {
       const { error } = await supabaseAdmin
         .from("distribution_rules")
-        .update({ name: data.name, team_id: data.team_id, method: data.method, is_active: data.is_active, config: data.config })
+        .update({ name: data.name, team_id: data.team_id, method: data.method, is_active: data.is_active, config: cfgJson })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
     const { data: row, error } = await supabaseAdmin
       .from("distribution_rules")
-      .insert({ name: data.name, team_id: data.team_id, method: data.method, is_active: data.is_active, config: data.config, created_by: context.userId })
+      .insert({ name: data.name, team_id: data.team_id, method: data.method, is_active: data.is_active, config: cfgJson, created_by: context.userId })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
