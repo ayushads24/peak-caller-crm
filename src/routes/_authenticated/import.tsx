@@ -427,6 +427,19 @@ function ImportPage() {
       if (error) errors.push({ row: 0, reason: `Tasks: ${error.message}` });
     }
 
+    // Insert labels (auto-create missing ones)
+    const labelLinks: { lead_id: string; label_id: string }[] = [];
+    for (const { id, idx } of insertedIds) {
+      const raw = toInsert[idx].labelsRaw;
+      if (!raw) continue;
+      const ids = await resolveLabels(raw);
+      for (const lid of ids) labelLinks.push({ lead_id: id, label_id: lid });
+    }
+    if (labelLinks.length > 0) {
+      const { error } = await supabase.from("lead_labels").insert(labelLinks);
+      if (error) errors.push({ row: 0, reason: `Labels: ${error.message}` });
+    }
+
     await logBatch(inserted, duplicates, errors);
     toast.success(`Imported ${inserted} leads · ${duplicates} duplicates skipped${errors.length ? ` · ${errors.length} errors` : ""}`);
     setImporting(false);
