@@ -30,7 +30,14 @@ type FieldKey =
   | "task_title"
   | "task_due_date"
   | "task_description"
-  | "label";
+  | "label"
+  | "extra_alt_phone"
+  | "extra_city"
+  | "extra_fb_ad"
+  | "extra_fb_campaign"
+  | "extra_capture_freq"
+  | "extra_lead_id"
+  | "extra_batch";
 
 const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "client_name", label: "Name", required: true },
@@ -47,6 +54,13 @@ const FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
   { key: "task_due_date", label: "Task Due Date" },
   { key: "task_description", label: "Task Description" },
   { key: "label", label: "Labels (comma separated)" },
+  { key: "extra_alt_phone", label: "Alternate Phone → notes" },
+  { key: "extra_city", label: "City → notes" },
+  { key: "extra_fb_ad", label: "Facebook Ad → notes" },
+  { key: "extra_fb_campaign", label: "Facebook Campaign → notes" },
+  { key: "extra_capture_freq", label: "Capture Frequency → notes" },
+  { key: "extra_lead_id", label: "External Lead ID → notes" },
+  { key: "extra_batch", label: "Batch Name → notes" },
 ];
 
 const SKIP = "__skip__";
@@ -63,19 +77,31 @@ type BatchLog = {
 
 function autoGuess(header: string): FieldKey | typeof SKIP {
   const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (/^name|client|fullname|customer/.test(h)) return "client_name";
-  if (/phone|mobile|contact|whatsapp/.test(h)) return "phone";
+  // Skip CRM-managed timestamps
+  if (/^modifiedon$|^updatedon$|^modifiedat$|^updatedat$/.test(h)) return SKIP;
+  if (/^capturedon$/.test(h)) return SKIP; // Created On wins
+  // Specific extras first (so they win over generic catches like "phone" / "campaign")
+  if (/^alternatephone$|^altphone$|^secondaryphone$|^phone2$/.test(h)) return "extra_alt_phone";
+  if (/^facebookad$|^fbad$|^adname$/.test(h)) return "extra_fb_ad";
+  if (/^facebookcampaign$|^fbcampaign$|^campaignname$/.test(h)) return "extra_fb_campaign";
+  if (/^capturefrequency$|^capturefreq$/.test(h)) return "extra_capture_freq";
+  if (/^leadid$|^externalid$|^externalleadid$/.test(h)) return "extra_lead_id";
+  if (/^batchname$|^batchnames$|^batch$/.test(h)) return "extra_batch";
+  if (/^city$|^town$|^location$/.test(h)) return "extra_city";
+  // Standard fields
+  if (/^name$|^clientname$|^fullname$|^customername$|^customer$/.test(h)) return "client_name";
+  if (/^phone$|^mobile$|^contact$|^whatsapp$|phonenumber|mobilenumber/.test(h)) return "phone";
   if (/email|mail/.test(h)) return "email";
-  if (/source|campaign|channel/.test(h)) return "lead_source";
-  if (/(sales|deal|amount|value|price)/.test(h)) return "sales_value";
-  if (/status|stage/.test(h)) return "status";
+  if (/^leadsource$|^source$|^channel$/.test(h)) return "lead_source";
+  if (/^budget$|sales|deal|amount|^value$|price/.test(h)) return "sales_value";
+  if (/^status$|stage/.test(h)) return "status";
   if (/tasktitle|tasksubject|tasktopic/.test(h)) return "task_title";
   if (/taskdue|taskdate|taskdeadline/.test(h)) return "task_due_date";
   if (/taskdesc|taskdetail|tasknote/.test(h)) return "task_description";
-  if (/assign|owner|salesperson|salesrep|rep$|assignedto/.test(h)) return "assigned_to";
+  if (/^assigneename$|^assignee$|assign|owner|salesperson|salesrep|rep$|assignedto/.test(h)) return "assigned_to";
   if (/^label|tag/.test(h)) return "label";
   if (/note|comment|remark|message/.test(h)) return "notes";
-  if (/created|leaddate|date$|enquiry|enquirydate/.test(h)) return "created_at";
+  if (/^createdon$|^createddate$|^created$|^leaddate$|^enquirydate$|^enquiry$/.test(h)) return "created_at";
   if (/follow|next|reminder/.test(h)) return "follow_up";
   return SKIP;
 }
