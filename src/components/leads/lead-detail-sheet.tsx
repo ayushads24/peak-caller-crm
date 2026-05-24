@@ -408,6 +408,7 @@ export function LeadDetailSheet({
               <Input
                 value={edit.phone ?? ""}
                 onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
+                onBlur={save}
               />
             </Field>
               </div>
