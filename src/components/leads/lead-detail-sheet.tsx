@@ -141,22 +141,35 @@ export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, o
   const status = statuses.find((s) => s.id === edit.status_id);
   const assignedLabels = labels.filter((l) => leadLabelIds.includes(l.id));
   const availableLabels = labels.filter((l) => !leadLabelIds.includes(l.id));
+  const cleanPhone = (edit.phone ?? "").replace(/\D/g, "");
+  const hasQuickActions = Boolean(edit.phone || edit.email);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0">
         <SheetHeader className="px-5 pt-5">
-          <SheetTitle className="font-display text-xl flex items-center gap-2">
-            {edit.client_name}
+          <SheetTitle className="font-display text-xl flex items-center gap-2 min-w-0">
+            <span className="truncate">{edit.client_name}</span>
             {status && <Badge style={{ background: status.color, color: "white" }} className="border-0">{status.name}</Badge>}
-            {onNext && (
-              <Button variant="outline" size="sm" className="ml-2 h-7 px-2 text-xs" onClick={onNext}>
-                Next <ChevronRight className="size-3.5 ml-1" />
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="ml-auto h-7 px-2 text-xs shrink-0" onClick={onNext} disabled={!onNext}>
+              Next <ChevronRight className="size-3.5 ml-1" />
+            </Button>
           </SheetTitle>
         </SheetHeader>
         <div className="px-5 pb-5">
+          {hasQuickActions && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+              {edit.phone && (
+                <Button asChild variant="outline" size="sm" className="justify-start"><a href={`tel:${edit.phone}`}><Phone className="size-3.5 mr-2" />Call</a></Button>
+              )}
+              {cleanPhone && (
+                <Button asChild variant="outline" size="sm" className="justify-start"><a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5 mr-2" />WhatsApp</a></Button>
+              )}
+              {edit.email && (
+                <Button asChild variant="outline" size="sm" className="justify-start"><a href={`mailto:${edit.email}`}><Mail className="size-3.5 mr-2" />Email</a></Button>
+              )}
+            </div>
+          )}
           {/* Lead details first */}
           <div className="space-y-3 mt-4">
             <Field label="Name"><Input value={edit.client_name} onChange={(e) => setEdit({ ...edit, client_name: e.target.value })} /></Field>
@@ -217,19 +230,7 @@ export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, o
             </div>
           </div>
 
-          {/* Quick actions + tabs BELOW the details */}
-          <div className="grid grid-cols-3 gap-2 mt-6">
-            {edit.phone && (
-              <Button asChild variant="outline" size="sm" className="justify-start"><a href={`tel:${edit.phone}`}><Phone className="size-3.5 mr-2" />Call</a></Button>
-            )}
-            {edit.phone && (
-              <Button asChild variant="outline" size="sm" className="justify-start"><a href={`https://wa.me/${(edit.phone || "").replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5 mr-2" />WhatsApp</a></Button>
-            )}
-            {edit.email && (
-              <Button asChild variant="outline" size="sm" className="justify-start"><a href={`mailto:${edit.email}`}><Mail className="size-3.5 mr-2" />Email</a></Button>
-            )}
-          </div>
-
+          {/* Tabs BELOW the details */}
           <Tabs defaultValue="notes" className="mt-4">
             <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="notes"><MessageSquare className="size-3.5 mr-1" />Notes {notes.length}</TabsTrigger>
