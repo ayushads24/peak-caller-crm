@@ -182,27 +182,26 @@ export function LeadDetailSheet({
 
   if (!lead || !edit) return null;
 
-  async function save() {
-    if (!edit) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        client_name: edit.client_name,
-        email: edit.email,
-        phone: edit.phone,
-        sales_value: edit.sales_value,
-        lead_source: edit.lead_source,
-        status_id: edit.status_id,
-        assigned_to: edit.assigned_to ?? null,
-      })
-      .eq("id", edit.id);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Lead updated");
-    onChanged();
-    void loadRelated(edit.id);
-  }
+  /* Auto-save when edit diverges from lead */
+  useEffect(() => {
+    if (!edit || !lead) return;
+    const changed =
+      edit.client_name !== lead.client_name ||
+      edit.email !== lead.email ||
+      edit.phone !== lead.phone ||
+      edit.sales_value !== lead.sales_value ||
+      edit.lead_source !== lead.lead_source ||
+      edit.status_id !== lead.status_id ||
+      edit.assigned_to !== lead.assigned_to;
+    if (!changed) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void save();
+    }, 1200);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [edit, lead, save]);
 
   async function addNote() {
     if (!noteText.trim() || !user) return;
