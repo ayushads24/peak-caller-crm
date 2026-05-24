@@ -9,15 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateFlowModal } from "@/components/workflow/create-flow-modal";
-import { Users, PhoneCall, TrendingUp, CalendarCheck, CalendarPlus, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone, Percent } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, formatDistanceToNow } from "date-fns";
+import { Users, PhoneCall, TrendingUp, CalendarCheck, CalendarPlus, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone, Percent, Filter } from "lucide-react";
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, startOfYear, subMonths } from "date-fns";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({ component: Page });
 
 interface StatusRow { id: string; name: string; color: string; is_sales: boolean; sort_order: number; }
 interface LeadLite { id: string; client_name: string; status_id: string | null; sales_value: number | null; created_at: string; }
+interface ProfileLite { id: string; full_name: string | null; email: string | null; }
 
 function Page() {
   const { user, roles } = useAuth();
@@ -38,30 +40,62 @@ function Page() {
   const [loading, setLoading] = useState(true);
   const [busyPunch, setBusyPunch] = useState(false);
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerTitle, setDrawerTitle] = useState("");
-  const [drawerLeads, setDrawerLeads] = useState<LeadLite[]>([]);
+  // Status Movement independent filters
+  const [smFrom, setSmFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
+  const [smTo, setSmTo] = useState<string>(format(endOfMonth(today), "yyyy-MM-dd"));
+  const [smAssigned, setSmAssigned] = useState<string>("all");
+  const [smLeads, setSmLeads] = useState<LeadLite[] | null>(null);
+  const [smLoading, setSmLoading] = useState(true);
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+
   const [tasksOpen, setTasksOpen] = useState(false);
   const [createFlowOpen, setCreateFlowOpen] = useState(false);
   const [punchOutGuard, setPunchOutGuard] = useState<{ pending: number } | null>(null);
 
   const fromIso = useMemo(() => startOfDay(new Date(from)).toISOString(), [from]);
   const toIso = useMemo(() => endOfDay(new Date(to)).toISOString(), [to]);
+  const smFromIso = useMemo(() => startOfDay(new Date(smFrom)).toISOString(), [smFrom]);
+  const smToIso = useMemo(() => endOfDay(new Date(smTo)).toISOString(), [smTo]);
 
   useEffect(() => { if (user) void load(); }, [user, fromIso, toIso]);
+  useEffect(() => { if (user) void loadStatusMovement(); }, [user, smFromIso, smToIso, smAssigned]);
 
   useEffect(() => {
     if (!user) return;
     const ch = supabase
       .channel("dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => { void load(); void loadStatusMovement(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "calls" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "statuses" }, () => { void load(); void loadStatusMovement(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => loadPunch())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [user]);
+
+  // Load profiles list for the team-member filter (only useful for managers, but harmless otherwise — RLS will restrict)
+  useEffect(() => {
+    if (!user) return;
+    void (async () => {
+      const { data } = await supabase.from("profiles").select("id, full_name, email").order("full_name");
+      setProfiles((data ?? []) as ProfileLite[]);
+    })();
+  }, [user]);
+
+  async function loadStatusMovement() {
+    if (!user) return;
+    setSmLoading(true);
+    let q = supabase
+      .from("leads")
+      .select("id, client_name, status_id, sales_value, created_at")
+      .gte("created_at", smFromIso)
+      .lte("created_at", smToIso);
+    if (smAssigned !== "all") q = q.eq("assigned_to", smAssigned);
+    const { data } = await q;
+    setSmLeads((data ?? []) as LeadLite[]);
+    setSmLoading(false);
+  }
 
   async function loadPunch() {
     if (!user) return;
@@ -121,19 +155,41 @@ function Page() {
 
   const byStatus = useMemo(() => {
     const map = new Map<string, LeadLite[]>();
-    for (const l of leads) {
+    for (const l of smLeads ?? []) {
       if (!l.status_id) continue;
       const arr = map.get(l.status_id) ?? [];
       arr.push(l);
       map.set(l.status_id, arr);
     }
     return map;
-  }, [leads]);
+  }, [smLeads]);
 
   function openStatusLeads(s: StatusRow) {
-    setDrawerTitle(`${s.name} — ${(byStatus.get(s.id) ?? []).length} leads`);
-    setDrawerLeads(byStatus.get(s.id) ?? []);
-    setDrawerOpen(true);
+    navigate({
+      to: "/leads",
+      search: {
+        status: s.id,
+        assigned: smAssigned !== "all" ? smAssigned : undefined,
+        from: smFromIso,
+        to: smToIso,
+      },
+    });
+  }
+
+  function applySmMonthPreset(preset: "current" | "last" | "year" | "custom") {
+    const now = new Date();
+    if (preset === "current") {
+      setSmFrom(format(startOfMonth(now), "yyyy-MM-dd"));
+      setSmTo(format(endOfMonth(now), "yyyy-MM-dd"));
+    } else if (preset === "last") {
+      const prev = subMonths(now, 1);
+      setSmFrom(format(startOfMonth(prev), "yyyy-MM-dd"));
+      setSmTo(format(endOfMonth(prev), "yyyy-MM-dd"));
+    } else if (preset === "year") {
+      setSmFrom(format(startOfYear(now), "yyyy-MM-dd"));
+      setSmTo(format(now, "yyyy-MM-dd"));
+    }
+    // "custom" — leave dates as-is, user edits inputs manually
   }
 
   async function punchIn() {
@@ -309,12 +365,52 @@ function Page() {
 
         {/* Status movement */}
         <Card className="lg:col-span-2 p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold">Status movement</h3>
-            <span className="text-xs text-muted-foreground">Click a status to view leads</span>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-semibold flex items-center gap-2"><Filter className="size-4 text-primary" />Status movement</h3>
+            <span className="text-xs text-muted-foreground hidden sm:inline">Click a status to open filtered leads</span>
           </div>
+
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-end gap-2 mb-4 p-3 rounded-lg bg-muted/40 border">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
+              <Input type="date" value={smFrom} onChange={(e) => setSmFrom(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
+              <Input type="date" value={smTo} onChange={(e) => setSmTo(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Month</label>
+              <Select onValueChange={(v) => applySmMonthPreset(v as "current" | "last" | "year" | "custom")}>
+                <SelectTrigger className="h-8 w-[150px]"><SelectValue placeholder="Preset" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current Month</SelectItem>
+                  <SelectItem value="last">Last Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isManager && (
+              <div className="min-w-[170px]">
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Team member</label>
+                <Select value={smAssigned} onValueChange={setSmAssigned}>
+                  <SelectTrigger className="h-8"><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All team members</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.full_name || p.email || p.id.slice(0, 8)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {statuses.map((s) => {
+            {smLoading && (smLeads === null) && Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+            {!smLoading && statuses.map((s) => {
               const count = (byStatus.get(s.id) ?? []).length;
               return (
                 <button key={s.id} onClick={() => openStatusLeads(s)} className="group flex items-center justify-between rounded-lg border bg-card p-3 hover:border-primary/50 hover:shadow-sm transition-all text-left">
@@ -333,22 +429,6 @@ function Page() {
           </div>
         </Card>
       </div>
-
-      {/* Status leads drawer */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader><SheetTitle className="font-display">{drawerTitle}</SheetTitle></SheetHeader>
-          <div className="mt-4 space-y-2">
-            {drawerLeads.length === 0 && <p className="text-sm text-muted-foreground">No leads in this status.</p>}
-            {drawerLeads.map((l) => (
-              <button key={l.id} onClick={() => { setDrawerOpen(false); navigate({ to: "/leads" }); }} className="w-full text-left rounded-lg border p-3 hover:border-primary/50 transition-colors">
-                <p className="font-medium text-sm">{l.client_name}</p>
-                <p className="text-[11px] text-muted-foreground">Created {formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}{l.sales_value ? ` · ₹${Number(l.sales_value).toLocaleString("en-IN")}` : ""}</p>
-              </button>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Tasks drawer */}
       <Sheet open={tasksOpen} onOpenChange={setTasksOpen}>
