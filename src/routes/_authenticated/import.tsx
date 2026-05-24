@@ -114,6 +114,7 @@ function ImportPage() {
   const [mapping, setMapping] = useState<Record<string, FieldKey | typeof SKIP>>({});
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
   const [existingPhones, setExistingPhones] = useState<Set<string>>(new Set());
+  const [profilesList, setProfilesList] = useState<{ id: string; full_name: string | null; email: string | null }[]>([]);
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<BatchLog[]>([]);
   const canImport = isAdmin(roles) || hasPermission(permissions, "leads.import");
@@ -121,14 +122,16 @@ function ImportPage() {
   useEffect(() => { void loadMeta(); }, []);
 
   async function loadMeta() {
-    const [s, l, h] = await Promise.all([
+    const [s, l, h, p] = await Promise.all([
       supabase.from("statuses").select("id, name").order("sort_order"),
       supabase.from("leads").select("phone").not("phone", "is", null),
       supabase.from("import_batches").select("*").order("created_at", { ascending: false }).limit(10),
+      supabase.from("profiles").select("id, full_name, email"),
     ]);
     setStatuses((s.data ?? []) as { id: string; name: string }[]);
       setExistingPhones(new Set((l.data ?? []).map((r: { phone: string | null }) => normalizePhone(r.phone)).filter(Boolean)));
     setHistory((h.data ?? []) as BatchLog[]);
+    setProfilesList((p.data ?? []) as { id: string; full_name: string | null; email: string | null }[]);
   }
 
   function normalizePhone(p: unknown): string {
@@ -228,6 +231,17 @@ function ImportPage() {
     if (!user) return;
     setImporting(true);
     const statusMap = new Map(statuses.map((s) => [s.name.toLowerCase(), s.id]));
+    const profileByName = new Map<string, string>();
+    const profileByEmail = new Map<string, string>();
+    profilesList.forEach((p) => {
+      if (p.full_name) profileByName.set(p.full_name.trim().toLowerCase(), p.id);
+      if (p.email) profileByEmail.set(p.email.trim().toLowerCase(), p.id);
+    });
+    function resolveAssignee(raw: unknown): string | null {
+      const v = String(raw ?? "").trim().toLowerCase();
+      if (!v) return null;
+      return profileByEmail.get(v) ?? profileByName.get(v) ?? null;
+    }
     const seen = new Set<string>();
     type LeadInsert = {
       client_name: string;
@@ -237,6 +251,7 @@ function ImportPage() {
       sales_value: number | null;
       status_id: string | null;
       created_by: string;
+      assigned_to?: string | null;
       created_at?: string;
       updated_at?: string;
     };
@@ -244,6 +259,10 @@ function ImportPage() {
       payload: LeadInsert;
       notes?: string;
       followUp?: Date;
+      taskTitle?: string;
+      taskDue?: Date;
+      taskDesc?: string;
+      assignedTo?: string | null;
     }> = [];
     let duplicates = 0;
     const errors: { row: number; reason: string }[] = [];
@@ -256,10 +275,15 @@ function ImportPage() {
       seen.add(phone);
       const createdAt = parseFlexibleDate(r.created_at);
       const followUp = parseFlexibleDate(r.follow_up);
+      const taskDue = parseFlexibleDate(r.task_due_date);
       const salesRaw = r.sales_value;
       const sales = salesRaw === "" || salesRaw == null ? null : Number(String(salesRaw).replace(/[^0-9.-]/g, ""));
       const statusName = String(r.status ?? "").trim().toLowerCase();
       const status_id = statusName ? statusMap.get(statusName) ?? null : null;
+      const assignedTo = resolveAssignee(r.assigned_to);
+      if (r.assigned_to && !assignedTo) {
+        errors.push({ row: i + 2, reason: `Unknown assignee: ${String(r.assigned_to)}` });
+      }
       const payload: LeadInsert = {
         client_name: name,
         phone: String(r.phone).trim(),
@@ -268,6 +292,7 @@ function ImportPage() {
         sales_value: sales != null && Number.isFinite(sales) ? sales : null,
         status_id,
         created_by: user.id,
+        assigned_to: assignedTo,
       };
       if (createdAt) {
         payload.created_at = createdAt.toISOString();
@@ -277,6 +302,10 @@ function ImportPage() {
         payload,
         notes: r.notes ? String(r.notes) : undefined,
         followUp: followUp ?? undefined,
+        taskTitle: r.task_title ? String(r.task_title).trim() : undefined,
+        taskDue: taskDue ?? undefined,
+        taskDesc: r.task_description ? String(r.task_description).trim() : undefined,
+        assignedTo,
       });
     });
 
@@ -317,13 +346,30 @@ function ImportPage() {
     }
 
     const taskRows = insertedIds
-      .filter(({ idx }) => toInsert[idx].followUp)
-      .map(({ id, idx }) => ({
-        lead_id: id,
-        title: "Follow-up",
-        due_date: toInsert[idx].followUp!.toISOString(),
-        created_by: user.id,
-      }));
+      .flatMap(({ id, idx }) => {
+        const item = toInsert[idx];
+        const rows: Array<{ lead_id: string; title: string; description?: string; due_date?: string; created_by: string; assigned_to?: string | null }> = [];
+        if (item.followUp) {
+          rows.push({
+            lead_id: id,
+            title: "Follow-up",
+            due_date: item.followUp.toISOString(),
+            created_by: user.id,
+            assigned_to: item.assignedTo ?? null,
+          });
+        }
+        if (item.taskTitle) {
+          rows.push({
+            lead_id: id,
+            title: item.taskTitle,
+            description: item.taskDesc,
+            due_date: item.taskDue ? item.taskDue.toISOString() : undefined,
+            created_by: user.id,
+            assigned_to: item.assignedTo ?? null,
+          });
+        }
+        return rows;
+      });
     if (taskRows.length > 0) {
       const { error } = await supabase.from("tasks").insert(taskRows);
       if (error) errors.push({ row: 0, reason: `Tasks: ${error.message}` });
