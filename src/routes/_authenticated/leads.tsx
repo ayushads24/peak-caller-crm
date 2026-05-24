@@ -587,7 +587,21 @@ function Page() {
         </div>
       )}
 
-      <LeadDetailSheet lead={active} statuses={statuses} labels={labels} profiles={profiles} open={!!active} onOpenChange={(v) => !v && setActive(null)} onChanged={load} />
+      <LeadDetailSheet
+        lead={active}
+        statuses={statuses}
+        labels={labels}
+        profiles={profiles}
+        open={!!active}
+        onOpenChange={(v) => !v && setActive(null)}
+        onChanged={load}
+        onNext={(() => {
+          if (!active) return undefined;
+          const idx = pageLeads.findIndex((l) => l.id === active.id);
+          if (idx < 0 || idx >= pageLeads.length - 1) return undefined;
+          return () => setActive(pageLeads[idx + 1]);
+        })()}
+      />
     </div>
   );
 }

@@ -1,22 +1,23 @@
-## Goal
-"Team Workflows" sidebar option sirf **Admin** aur **Team Leader** ko dikhe — Manager ko nahi.
+## Changes in `src/components/leads/lead-detail-sheet.tsx`
 
-## Current behavior
-`src/routes/_authenticated.tsx` line 43:
-```ts
-const canManageTeamFlows = isAdminOrManager(roles) || roles.includes("team_leader");
-```
-Iska matlab admin + manager + team_leader teeno ko dikh raha hai.
+### 1. WhatsApp button (Call ke right)
+- Quick actions grid (line 215-222) ko 3 columns kar denge (Call | WhatsApp | Email).
+- WhatsApp button `edit.phone` hone par dikhega.
+- Link: `https://wa.me/{phone}` (digits-only, leading `+` strip; agar number 10 digits ka Indian lagta hai aur country code nahi hai to bhi `wa.me` directly accept karta hai — hum sirf non-digits strip karenge).
+- Icon: `MessageCircle` from lucide-react (WhatsApp-style chat icon, already in lucide set).
+- `target="_blank" rel="noreferrer"`.
 
-## Change
-Sirf sidebar visibility tighten karni hai:
-```ts
-const canManageTeamFlows = roles.includes("admin") || roles.includes("team_leader");
-```
+### 2. Next button (Name ke right) — lead list me next lead pe jaane ke liye
+- `LeadDetailSheet` props me ek optional `onNext?: () => void` add karenge (aur parent jo isko render karta hai usme handler pass karenge taaki current lead ke baad wala lead khul jaaye, list me se).
+- `SheetTitle` row me, naam ke baaju me ek chhota "Next →" button add karenge jo `onNext` call karega. Agar `onNext` undefined ya last lead hai to button disabled.
+- Parent file (jahan `<LeadDetailSheet>` use hota hai — `src/routes/_authenticated/leads.tsx` ya similar) me:
+  - Currently open lead ka index nikalna filtered list me se
+  - `onNext` me index+1 wale lead ko `setSelectedLead` karna
+  - Last lead pe button disable
 
-## Out of scope
-- Route page (`/team-workflows.tsx`) ki internal access logic — RLS already TL/admin/manager allow karta hai via `can_manage_user_workflow`. Agar Manager URL directly type kare to abhi access milega. Aap bole "sirf sidebar option", to DB/RLS untouched.
-- Agar Manager ko bhi pura block karna ho (route guard + RLS), bata dijiye — separate change karenge.
+### Out of scope
+- Koi DB/RLS change nahi.
+- WhatsApp template messages, prefilled text — ye baad me add kar sakte hain agar chahiye.
 
-## Files
-- `src/routes/_authenticated.tsx` — ek line update.
+### Clarification (agar zaroori ho)
+"Next" se aapka matlab **list me agle lead pe jump** karna hi hai na? Agar kuch aur (jaise "Next status" ya wizard-style next step) chahiye to bata dijiye, warna main yahi implement kar dunga.
