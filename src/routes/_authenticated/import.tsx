@@ -361,6 +361,7 @@ function ImportPage() {
       assigned_to?: string | null;
       created_at?: string;
       updated_at?: string;
+      imported_at?: string;
     };
     const toInsert: Array<{
       payload: LeadInsert;
