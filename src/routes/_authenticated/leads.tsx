@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -39,7 +39,6 @@ function Page() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 40;
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { void load(); }, []);
   useEffect(() => {
@@ -313,30 +312,6 @@ function Page() {
     URL.revokeObjectURL(url);
   }
 
-  function importCsv(file: File) {
-    if (!user) return;
-    Papa.parse<Record<string, string>>(file, {
-      header: true, skipEmptyLines: true,
-      complete: async (res) => {
-        const existing = new Set((leads ?? []).flatMap((l) => [l.email?.toLowerCase(), l.phone].filter(Boolean) as string[]));
-        const rows = res.data
-          .map((r) => ({
-            client_name: r.client_name || r.name || r.Name || "",
-            email: r.email || r.Email || null,
-            phone: r.phone || r.Phone || null,
-            sales_value: r.sales_value ? Number(r.sales_value) : null,
-            lead_source: r.lead_source || r.source || null,
-            created_by: user.id,
-          }))
-          .filter((r) => r.client_name)
-          .filter((r) => !(r.email && existing.has(r.email.toLowerCase())) && !(r.phone && existing.has(r.phone)));
-        if (rows.length === 0) { toast.info("No new leads to import"); return; }
-        const { error } = await supabase.from("leads").insert(rows);
-        if (error) toast.error(error.message); else toast.success(`Imported ${rows.length} leads`);
-      },
-    });
-  }
-
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -345,8 +320,9 @@ function Page() {
           <p className="text-muted-foreground mt-1 text-sm">{leads?.length ?? 0} total · {filtered.length} shown</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }} />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="size-4 mr-1" />Import</Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/import"><Upload className="size-4 mr-1" />Import</Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4 mr-1" />Export</Button>
           <CreateLeadDialog open={creating} onOpenChange={setCreating} statuses={statuses} onCreated={load} />
         </div>
