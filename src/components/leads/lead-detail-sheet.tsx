@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Phone, Trash2, Plus, Check, MessageSquare, ListTodo, Activity as ActivityIcon, X, Tag } from "lucide-react";
+import { Mail, Phone, Trash2, Plus, Check, MessageSquare, ListTodo, Activity as ActivityIcon, X, Tag, MessageCircle, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -30,7 +30,7 @@ export interface StatusRow { id: string; name: string; color: string; is_sales: 
 export interface LabelRow { id: string; name: string; color: string; }
 export interface ProfileLite { id: string; full_name: string | null; email: string | null }
 
-export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, onOpenChange, onChanged }: {
+export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, onOpenChange, onChanged, onNext }: {
   lead: LeadRow | null;
   statuses: StatusRow[];
   labels: LabelRow[];
@@ -38,6 +38,7 @@ export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, o
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onChanged: () => void;
+  onNext?: () => void;
 }) {
   const { user } = useAuth();
   const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
@@ -148,6 +149,11 @@ export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, o
           <SheetTitle className="font-display text-xl flex items-center gap-2">
             {edit.client_name}
             {status && <Badge style={{ background: status.color, color: "white" }} className="border-0">{status.name}</Badge>}
+            {onNext && (
+              <Button variant="outline" size="sm" className="ml-2 h-7 px-2 text-xs" onClick={onNext}>
+                Next <ChevronRight className="size-3.5 ml-1" />
+              </Button>
+            )}
           </SheetTitle>
         </SheetHeader>
         <div className="px-5 pb-5">
@@ -212,9 +218,12 @@ export function LeadDetailSheet({ lead, statuses, labels, profiles = [], open, o
           </div>
 
           {/* Quick actions + tabs BELOW the details */}
-          <div className="grid grid-cols-2 gap-2 mt-6">
+          <div className="grid grid-cols-3 gap-2 mt-6">
             {edit.phone && (
               <Button asChild variant="outline" size="sm" className="justify-start"><a href={`tel:${edit.phone}`}><Phone className="size-3.5 mr-2" />Call</a></Button>
+            )}
+            {edit.phone && (
+              <Button asChild variant="outline" size="sm" className="justify-start"><a href={`https://wa.me/${(edit.phone || "").replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5 mr-2" />WhatsApp</a></Button>
             )}
             {edit.email && (
               <Button asChild variant="outline" size="sm" className="justify-start"><a href={`mailto:${edit.email}`}><Mail className="size-3.5 mr-2" />Email</a></Button>
