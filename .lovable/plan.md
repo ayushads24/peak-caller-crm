@@ -1,68 +1,31 @@
+Problem clear hai: Leads page ke top-right Import button abhi purana quick CSV importer use kar raha hai. Woh sirf client_name, email, phone, sales_value, lead_source insert karta hai. Isliye Excel/CSV me Status, Labels, Assigned name, Notes, Tasks, Created On sab hone ke baad bhi app me lead Fresh, Unassigned, no labels, current created time ke saath aa rahi hai.
 
-## Goal
+Plan:
 
-Tumhari Excel ke exact column names (Status, Assignee name, Name, Phone, Email, Alternate Phone, Lead Source, BUDGET, City, Facebook ad, Facebook Campaign, Created On, Modified On, Capture Frequency, Captured On, Lead id, Batch Names) automatically sahi field pe map ho jayein, aur **Created On** ki date se CRM ke Leads page pe filter kar sako.
+1. Leads page ka broken quick importer remove/replace karna
+   - `/leads` page ke Import button ko direct proper Historical Import page (`/import`) par bhejenge.
+   - Old `importCsv()` logic remove/disable karenge, kyunki wahi data loss ka root cause hai.
+   - Isse user galti se wrong importer use nahi karega.
 
----
+2. Proper Import page ko single source of truth banana
+   - `/import` page already Status, Labels, Assigned To, Notes, Tasks, Created Date parse/insert karta hai.
+   - Usme mapping preview visible rahega, taaki import se pehle clearly दिखे कि Excel का कौन सा column कहाँ जा रहा है.
 
-## 1. Import page — auto-map ko smarter banayenge
+3. Excel columns ko exact CRM fields से map करना
+   - Status → lead status
+   - Assignee name → assigned user
+   - Name, Phone, Email → lead details
+   - Lead Source, BUDGET → source/value
+   - Created On → original lead `created_at`, जिससे date filter चलेगा
+   - Labels → lead labels
+   - Notes → notes tab
+   - Task fields → tasks tab
+   - Alternate Phone, City, Facebook ad, Facebook Campaign, Capture Frequency, Lead id, Batch Names → labelled notes में preserve होंगे
 
-File: `src/routes/_authenticated/import.tsx`
+4. Import errors को ज्यादा clear करना
+   - अगर status या assignee CRM में match नहीं होता, import silently Fresh/Unassigned नहीं दिखाएगा; user को row-wise error मिलेगा जैसे `Unknown assignee` / `Unknown status`.
+   - इससे पता चलेगा कि Excel में नाम CRM user/status से match नहीं हो रहा.
 
-**`autoGuess()` me regex update** taaki ye headers pakad le:
-
-| Excel column | Maps to |
-|---|---|
-| Status | `status` |
-| Assignee name | `assigned_to` |
-| Name | `client_name` |
-| Phone | `phone` |
-| Email | `email` |
-| Alternate Phone | `notes` (prefix `Alt Phone: …`) |
-| Lead Source | `lead_source` |
-| BUDGET | `sales_value` |
-| City | `notes` (prefix `City: …`) |
-| Facebook ad | `notes` (prefix `FB Ad: …`) |
-| Facebook Campaign | `notes` (prefix `FB Campaign: …`) |
-| **Created On** | `created_at` ✅ (leads.created_at is set from this) |
-| Modified On | skip (CRM khud manage karta hai) |
-| Capture Frequency | `notes` |
-| Captured On | skip (Created On already covers it) |
-| Lead id | `notes` (prefix `External ID: …`) |
-| Batch Names | `notes` (prefix `Batch: …`) |
-
-Kyunki "notes" sirf ek hi column le sakta hai, hum ek nayi helper field `extra_notes` add karenge jo multiple secondary columns (Alt Phone, City, FB Ad/Campaign, Capture Frequency, Lead id, Batch Names) ko **combine karke ek notes entry** banayega per lead — labeled lines me, taaki sab info safe rahe aur lead detail me dikhe.
-
-`created_at` waala flow already sahi hai (line 348–349) — lead row insert hote hi `created_at` Excel ki date set ho jata hai. Bas auto-guess miss kar raha tha "Created On" ko reliably.
-
-## 2. Leads page — Created Date filter UI wapas laana
-
-File: `src/components/leads/leads-filter-bar.tsx`
-
-`DateFilter` component already defined hai (line 256) aur leads page (`leads.tsx:157`) `dateFrom`/`dateTo` use bhi karta hai — bas toolbar row me button **render nahi ho raha**. Status/Label/Source ke saath ek `<DateFilter ... />` button add karenge with presets (Today, Last 7d, This month, Last month, custom range).
-
-Iske baad imported leads ki original "Created On" date se filter karna ek click me ho jayega.
-
----
-
-## Technical details
-
-- `autoGuess` regex me ye additions:
-  - `^status$` → status
-  - `assigneename|assignee` → assigned_to
-  - `^name$|^clientname$` → client_name
-  - `alternate|altphone|secondaryphone` → new `extra_note:alt_phone`
-  - `^budget$|^amount$` → sales_value
-  - `^city$|location` → `extra_note:city`
-  - `facebookad|fbad|adname` → `extra_note:fb_ad`
-  - `facebookcampaign|fbcampaign|campaignname` → `extra_note:fb_campaign`
-  - `createdon|^createddate$|^enquirydate$` → created_at
-  - `modifiedon|updatedon` → SKIP
-  - `capturefreq|capturefrequency` → `extra_note:capture_freq`
-  - `capturedon` → SKIP (Created On wins)
-  - `^leadid$|externalid` → `extra_note:lead_id`
-  - `batchname|batchnames` → `extra_note:batch`
-- New `FieldKey` variants for the 7 `extra_note:*` slots, all writing into a combined `notes` row per lead with `Label: value` lines, joined with `\n`. If user has also mapped a primary `notes` column, prepend it.
-- Filter bar: insert `<DateFilter filters={filters} onChange={onChange} />` between Source and AssignedFilter; no logic changes needed in `leads.tsx`.
-
-Confirm karo to build mode me jaake ye changes apply kar deta hoon.
+5. Verify करना
+   - Code check करूँगा कि `/leads` का Import अब पुराना partial importer नहीं चला रहा.
+   - Proper import flow में created_at/status/assigned/labels/tasks/notes insert logic intact रहे.

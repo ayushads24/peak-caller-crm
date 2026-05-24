@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -345,8 +345,9 @@ function Page() {
           <p className="text-muted-foreground mt-1 text-sm">{leads?.length ?? 0} total · {filtered.length} shown</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }} />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="size-4 mr-1" />Import</Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/import"><Upload className="size-4 mr-1" />Import</Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4 mr-1" />Export</Button>
           <CreateLeadDialog open={creating} onOpenChange={setCreating} statuses={statuses} onCreated={load} />
         </div>
