@@ -7,9 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Plus, Loader2, ListChecks, ChevronRight, ShieldAlert } from "lucide-react";
+import { Plus, Loader2, ListChecks, ChevronRight, ShieldAlert, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { CreateFlowModal } from "@/components/workflow/create-flow-modal";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/team-workflows")({ component: Page });
 
@@ -71,6 +82,23 @@ function Page() {
   const [drillLeads, setDrillLeads] = useState<Map<string, LeadLite>>(new Map());
   const [drillStatuses, setDrillStatuses] = useState<Map<string, StatusLite>>(new Map());
   const [drillLoading, setDrillLoading] = useState(false);
+
+  const [deleteFlow, setDeleteFlow] = useState<FlowRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirmDelete() {
+    if (!deleteFlow) return;
+    setDeleting(true);
+    const { error } = await supabase.from("calling_flows").delete().eq("id", deleteFlow.id);
+    setDeleting(false);
+    if (error) {
+      toast.error("Delete failed: " + error.message);
+      return;
+    }
+    toast.success("Workflow deleted");
+    setDeleteFlow(null);
+    void loadFlows();
+  }
 
   // Load members
   useEffect(() => {
@@ -291,6 +319,15 @@ function Page() {
                     </div>
                     <div className="text-[10px] uppercase text-muted-foreground tracking-wider">complete</div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); setDeleteFlow(f); }}
+                    title="Delete workflow"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                   <ChevronRight className="size-4 text-muted-foreground" />
                 </div>
               </Card>
@@ -375,6 +412,32 @@ function Page() {
           )}
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={!!deleteFlow} onOpenChange={(o) => !o && setDeleteFlow(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this workflow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteFlow && (
+                <>
+                  {format(new Date(deleteFlow.work_date), "EEE, MMM d, yyyy")} · {deleteFlow.total} leads.
+                  Yeh action permanent hai aur isme saare items delete ho jayenge.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void confirmDelete(); }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
