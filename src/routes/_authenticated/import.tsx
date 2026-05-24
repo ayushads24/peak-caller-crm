@@ -125,16 +125,22 @@ function parseFlexibleDate(v: unknown): Date | null {
     "MM/dd/yyyy", "M/d/yyyy",
     "yyyy-MM-dd", "yyyy/MM/dd",
     "dd/MM/yyyy HH:mm", "dd-MM-yyyy HH:mm",
+    "dd/MM/yyyy HH:mm:ss", "d/M/yyyy HH:mm:ss", "dd-MM-yyyy HH:mm:ss", "d-M-yyyy HH:mm:ss",
     "yyyy-MM-dd HH:mm:ss",
     // 2-digit year
     "dd/MM/yy", "d/M/yy", "dd-MM-yy", "d-M-yy",
+    "dd/MM/yy HH:mm:ss", "d/M/yy HH:mm:ss", "dd-MM-yy HH:mm:ss", "d-M-yy HH:mm:ss",
     // 12-hour AM/PM
     "dd/MM/yyyy h:mm a", "dd-MM-yyyy h:mm a",
     "dd/MM/yyyy hh:mm a", "yyyy-MM-dd h:mm a",
+    "dd/MM/yyyy h:mm:ss a", "dd-MM-yyyy h:mm:ss a",
+    "dd/MM/yyyy hh:mm:ss a", "yyyy-MM-dd h:mm:ss a",
     // month-name formats
     "dd MMM yyyy", "d MMM yyyy", "dd-MMM-yyyy", "d-MMM-yyyy",
     "dd MMM yyyy HH:mm", "d MMM yyyy HH:mm",
+    "dd MMM yyyy HH:mm:ss", "d MMM yyyy HH:mm:ss",
     "dd MMM yyyy h:mm a", "d MMM yyyy h:mm a",
+    "dd MMM yyyy h:mm:ss a", "d MMM yyyy h:mm:ss a",
     "dd MMMM yyyy", "d MMMM yyyy",
     "MMM d, yyyy", "MMMM d, yyyy",
     "MMM d yyyy", "MMMM d yyyy",
@@ -279,18 +285,20 @@ function ImportPage() {
 
   const validation = useMemo(() => {
     const seen = new Set<string>();
-    let valid = 0, dupExisting = 0, dupInFile = 0, missingRequired = 0;
+    const hasCreatedDateMapping = Object.values(mapping).includes("created_at");
+    let valid = 0, dupExisting = 0, dupInFile = 0, missingRequired = 0, badCreatedDate = 0;
     for (const r of preview) {
       const name = String(r.client_name ?? "").trim();
       const phone = normalizePhone(r.phone);
       if (!name || !phone) { missingRequired++; continue; }
       if (existingPhones.has(phone)) { dupExisting++; continue; }
       if (seen.has(phone)) { dupInFile++; continue; }
+      if (!r.created_at || !parseFlexibleDate(r.created_at)) { badCreatedDate++; continue; }
       seen.add(phone);
       valid++;
     }
-    return { valid, dupExisting, dupInFile, missingRequired, total: preview.length };
-  }, [preview, existingPhones]);
+    return { valid, dupExisting, dupInFile, missingRequired, badCreatedDate, hasCreatedDateMapping, total: preview.length };
+  }, [preview, existingPhones, mapping]);
 
   async function runImport() {
     if (!user) return;
@@ -376,6 +384,10 @@ function ImportPage() {
     let duplicates = 0;
     const errors: { row: number; reason: string }[] = [];
 
+    if (!validation.hasCreatedDateMapping) {
+      errors.push({ row: 0, reason: "Created Date / Created On column mapping is mandatory" });
+    }
+
     preview.forEach((r, i) => {
       const name = String(r.client_name ?? "").trim();
       const phone = normalizePhone(r.phone);
@@ -383,8 +395,9 @@ function ImportPage() {
       if (existingPhones.has(phone) || seen.has(phone)) { duplicates++; return; }
       seen.add(phone);
       const createdAt = parseFlexibleDate(r.created_at);
-      if (r.created_at && !createdAt) {
-        errors.push({ row: i + 2, reason: `Created On parse नहीं हुआ: ${String(r.created_at)}` });
+      if (!r.created_at || !createdAt) {
+        errors.push({ row: i + 2, reason: r.created_at ? `Created On parse नहीं हुआ: ${String(r.created_at)}` : "Created On missing" });
+        return;
       }
       const followUp = parseFlexibleDate(r.follow_up);
       const taskDue = parseFlexibleDate(r.task_due_date);
@@ -408,11 +421,9 @@ function ImportPage() {
         created_by: user.id,
         assigned_to: assignedTo,
         imported_at: new Date().toISOString(),
+        created_at: createdAt.toISOString(),
+        updated_at: createdAt.toISOString(),
       };
-      if (createdAt) {
-        payload.created_at = createdAt.toISOString();
-        payload.updated_at = createdAt.toISOString();
-      }
       toInsert.push({
         payload,
         notes: buildCombinedNotes(r),
@@ -607,8 +618,12 @@ function ImportPage() {
                 <Badge className="bg-amber-500/15 text-amber-700 border-0">{validation.dupExisting} existing duplicates</Badge>
                 <Badge className="bg-amber-500/15 text-amber-700 border-0">{validation.dupInFile} in-file duplicates</Badge>
                 <Badge className="bg-red-500/15 text-red-700 border-0"><AlertTriangle className="size-3 mr-1" />{validation.missingRequired} missing required</Badge>
+                <Badge className="bg-red-500/15 text-red-700 border-0"><AlertTriangle className="size-3 mr-1" />{validation.badCreatedDate} bad created dates</Badge>
               </div>
             </div>
+            {!validation.hasCreatedDateMapping && (
+              <p className="mb-3 text-xs font-medium text-red-600">Created Date / Created On mapping mandatory hai. Iske bina import disable rahega.</p>
+            )}
             <div className="overflow-auto rounded-lg border max-h-96">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50 text-muted-foreground uppercase tracking-wider sticky top-0">
@@ -621,8 +636,9 @@ function ImportPage() {
                     const phone = normalizePhone(r.phone);
                     const name = String(r.client_name ?? "").trim();
                     const isDup = phone && existingPhones.has(phone);
-                    const missing = !name || !phone;
                     const createdAt = parseFlexibleDate(r.created_at);
+                    const badCreatedDate = !r.created_at || !createdAt;
+                    const missing = !name || !phone || badCreatedDate;
                     return (
                       <tr key={i} className={`border-t ${missing ? "bg-red-500/5" : isDup ? "bg-amber-500/5" : ""}`}>
                         {FIELDS.map((f) => {
