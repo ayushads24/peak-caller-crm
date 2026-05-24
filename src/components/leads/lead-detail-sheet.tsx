@@ -203,6 +203,14 @@ export function LeadDetailSheet({
     };
   }, [edit, lead, save]);
 
+  /* Flush pending auto-save when sheet closes */
+  useEffect(() => {
+    if (!open && saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, [open]);
+
   async function addNote() {
     if (!noteText.trim() || !user) return;
     const { error } = await supabase
