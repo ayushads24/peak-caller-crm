@@ -77,6 +77,11 @@ interface Brk {
   started_at: string;
   ended_at: string | null;
 }
+type ProfilesDirectoryQuery = {
+  select: (columns: string) => {
+    order: (column: string) => PromiseLike<{ data: ProfileLite[] | null }>;
+  };
+};
 
 const CAT_META: Record<FlowCategory, { label: string; icon: typeof Flame; color: string }> = {
   fresh: { label: "Fresh", icon: Flame, color: "#f97316" },
@@ -175,7 +180,9 @@ function Page() {
         .order("priority"),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color"),
-      (supabase as any).from("profiles_directory").select("id, full_name, email"),
+      (supabase.from as unknown as (table: "profiles_directory") => ProfilesDirectoryQuery)("profiles_directory")
+        .select("id, full_name, email")
+        .order("full_name"),
       loadBreak(),
     ]);
     setItems((its ?? []) as Item[]);
