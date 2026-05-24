@@ -402,11 +402,12 @@ function ImportPage() {
         client_name: name,
         phone: String(r.phone).trim(),
         email: r.email ? String(r.email).trim() : null,
-        lead_source: r.lead_source ? String(r.lead_source).trim() : null,
+        lead_source: r.lead_source ? String(r.lead_source).trim() : "Excel Import",
         sales_value: sales != null && Number.isFinite(sales) ? sales : null,
         status_id,
         created_by: user.id,
         assigned_to: assignedTo,
+        imported_at: new Date().toISOString(),
       };
       if (createdAt) {
         payload.created_at = createdAt.toISOString();
