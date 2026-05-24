@@ -337,7 +337,7 @@ export function LeadDetailSheet({
             </div>
           </SheetTitle>
 
-          {/* Quick actions + save row */}
+          {/* Quick actions row */}
           <div className="flex items-center gap-2">
             <div className="grid grid-cols-3 gap-1.5 flex-1">
               <QuickAction
@@ -360,15 +360,11 @@ export function LeadDetailSheet({
                 tone="text-indigo-600"
               />
             </div>
-            <Button
-              onClick={save}
-              disabled={saving}
-              size="sm"
-              className="bg-gradient-primary h-9"
-            >
-              <Check className="size-4 mr-1" />
-              {saving ? "Saving…" : "Save"}
-            </Button>
+            {saving && (
+              <span className="text-[10px] text-muted-foreground animate-pulse">
+                Saving…
+              </span>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9">
