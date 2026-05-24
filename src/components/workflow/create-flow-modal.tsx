@@ -7,17 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
-import { Flame, CalendarRange, FileText, RotateCw, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Flame, CalendarRange, FileText, RotateCw, ChevronUp, ChevronDown, Loader2, Plus, X, Tag } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { toast } from "sonner";
 
 export type FlowCategory = "fresh" | "interested_meeting" | "quotation_sent" | "followup";
 
+type StatusRow = { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean };
+
+const FOLLOWUP_KEY = "__followup__";
+
 interface CategoryConfig {
-  key: FlowCategory;
-  label: string;
-  statusName: string | null; // null = any non-terminal
-  icon: typeof Flame;
+  rowId: string;
+  statusId: string; // status uuid, or FOLLOWUP_KEY for "any open status"
   enabled: boolean;
   fromDate: string;
   toDate: string;
@@ -26,20 +29,63 @@ interface CategoryConfig {
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 const daysAgo = (n: number) => format(subDays(new Date(), n), "yyyy-MM-dd");
+const newRowId = () => Math.random().toString(36).slice(2, 10);
 
-const DEFAULTS: CategoryConfig[] = [
-  { key: "interested_meeting", label: "Interested in Meeting", statusName: "Interested In Meeting", icon: CalendarRange, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 3 },
-  { key: "quotation_sent", label: "Quotation Sent", statusName: "Quotation Sent", icon: FileText, enabled: true, fromDate: daysAgo(15), toDate: today(), attempts: 2 },
-  { key: "fresh", label: "Fresh Leads", statusName: "Fresh", icon: Flame, enabled: true, fromDate: today(), toDate: today(), attempts: 2 },
-  { key: "followup", label: "Follow-up Calls", statusName: null, icon: RotateCw, enabled: false, fromDate: daysAgo(3), toDate: today(), attempts: 1 },
-];
+function categoryFor(name: string | null): FlowCategory {
+  if (!name) return "followup";
+  const n = name.toLowerCase();
+  if (n.includes("fresh") || n.includes("new")) return "fresh";
+  if (n.includes("meeting")) return "interested_meeting";
+  if (n.includes("quotation") || n.includes("quote")) return "quotation_sent";
+  return "followup";
+}
+
+function iconFor(cat: FlowCategory) {
+  if (cat === "fresh") return Flame;
+  if (cat === "interested_meeting") return CalendarRange;
+  if (cat === "quotation_sent") return FileText;
+  return RotateCw;
+}
 
 export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: (flowId: string) => void }) {
   const { user } = useAuth();
-  const [cats, setCats] = useState<CategoryConfig[]>(DEFAULTS);
+  const [statuses, setStatuses] = useState<StatusRow[]>([]);
+  const [cats, setCats] = useState<CategoryConfig[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
 
-  useEffect(() => { if (open) setCats(DEFAULTS); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingStatuses(true);
+      const { data } = await supabase
+        .from("statuses")
+        .select("id, name, color, is_sales, is_lost")
+        .order("sort_order");
+      if (cancelled) return;
+      const rows = (data ?? []) as StatusRow[];
+      const open_ = rows.filter((s) => !s.is_sales && !s.is_lost);
+      setStatuses(open_);
+
+      // Seed defaults from real statuses by name (best-effort) + follow-up bucket
+      const find = (needle: string) =>
+        open_.find((s) => s.name.toLowerCase().includes(needle.toLowerCase()));
+      const seed: CategoryConfig[] = [];
+      const meeting = find("meeting");
+      const quote = find("quotation") ?? find("quote");
+      const fresh = find("fresh") ?? find("new");
+      if (meeting) seed.push({ rowId: newRowId(), statusId: meeting.id, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 3 });
+      if (quote) seed.push({ rowId: newRowId(), statusId: quote.id, enabled: true, fromDate: daysAgo(15), toDate: today(), attempts: 2 });
+      if (fresh) seed.push({ rowId: newRowId(), statusId: fresh.id, enabled: true, fromDate: today(), toDate: today(), attempts: 2 });
+      seed.push({ rowId: newRowId(), statusId: FOLLOWUP_KEY, enabled: false, fromDate: daysAgo(3), toDate: today(), attempts: 1 });
+      setCats(seed.length ? seed : [
+        { rowId: newRowId(), statusId: open_[0]?.id ?? FOLLOWUP_KEY, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
+      ]);
+      setLoadingStatuses(false);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   function update(idx: number, patch: Partial<CategoryConfig>) {
     setCats((arr) => arr.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
@@ -53,6 +99,27 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
       return next;
     });
   }
+  function addRow() {
+    const used = new Set(cats.map((c) => c.statusId));
+    const firstUnused = statuses.find((s) => !used.has(s.id));
+    const pick = firstUnused?.id ?? statuses[0]?.id ?? FOLLOWUP_KEY;
+    setCats((arr) => [
+      ...arr,
+      { rowId: newRowId(), statusId: pick, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
+    ]);
+  }
+  function removeRow(idx: number) {
+    setCats((arr) => arr.filter((_, i) => i !== idx));
+  }
+
+  function rowMeta(c: CategoryConfig): { label: string; category: FlowCategory; color: string } {
+    if (c.statusId === FOLLOWUP_KEY) {
+      return { label: "Follow-up Calls (any open status)", category: "followup", color: "#6366f1" };
+    }
+    const st = statuses.find((s) => s.id === c.statusId);
+    if (!st) return { label: "Unknown status", category: "followup", color: "#6366f1" };
+    return { label: st.name, category: categoryFor(st.name), color: st.color };
+  }
 
   async function start() {
     if (!user) return;
@@ -60,32 +127,31 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
     if (enabled.length === 0) return toast.error("Select at least one category");
     setBusy(true);
 
-    // Resolve status_ids
-    const { data: statuses } = await supabase.from("statuses").select("id, name, is_sales, is_lost");
-    const byName = new Map((statuses ?? []).map((s) => [s.name.toLowerCase(), s]));
-    const terminalIds = new Set((statuses ?? []).filter((s) => s.is_sales || s.is_lost).map((s) => s.id));
+    // Resolve terminal status ids (for follow-up filter)
+    const { data: allStatuses } = await supabase.from("statuses").select("id, is_sales, is_lost");
+    const terminalIds = new Set((allStatuses ?? []).filter((s) => s.is_sales || s.is_lost).map((s) => s.id));
 
     // Build queue
     const queue: { lead_id: string; category: FlowCategory; priority: number; attempts_planned: number }[] = [];
     const seen = new Set<string>();
     let priority = 0;
     for (const cat of enabled) {
+      const meta = rowMeta(cat);
       let q = supabase.from("leads").select("id, status_id, created_at, updated_at")
         .gte("created_at", new Date(cat.fromDate).toISOString())
         .lte("created_at", new Date(cat.toDate + "T23:59:59").toISOString());
-      if (cat.statusName) {
-        const st = byName.get(cat.statusName.toLowerCase());
-        if (st) q = q.eq("status_id", st.id);
+      if (cat.statusId !== FOLLOWUP_KEY) {
+        q = q.eq("status_id", cat.statusId);
       }
       const { data: leads } = await q;
       const filtered = (leads ?? []).filter((l) => {
-        if (cat.key === "followup") return !l.status_id || !terminalIds.has(l.status_id);
+        if (cat.statusId === FOLLOWUP_KEY) return !l.status_id || !terminalIds.has(l.status_id);
         return true;
       });
       for (const l of filtered) {
         if (seen.has(l.id)) continue;
         seen.add(l.id);
-        queue.push({ lead_id: l.id, category: cat.key, priority: priority++, attempts_planned: cat.attempts });
+        queue.push({ lead_id: l.id, category: meta.category, priority: priority++, attempts_planned: cat.attempts });
       }
     }
 
@@ -115,45 +181,88 @@ export function CreateFlowModal({ open, onOpenChange, onCreated }: { open: boole
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Create Today's Workflow</DialogTitle>
-          <p className="text-sm text-muted-foreground">Pick categories, date range, and daily attempts. Order = call priority.</p>
+          <p className="text-sm text-muted-foreground">Pick statuses, date range, and daily attempts. Order = call priority. Use + to add more.</p>
         </DialogHeader>
         <div className="space-y-3 mt-2">
-          {cats.map((c, i) => (
-            <Card key={c.key} className={`p-4 transition-all ${c.enabled ? "border-primary/40" : "opacity-60"}`}>
-              <div className="flex items-start gap-3">
-                <Checkbox checked={c.enabled} onCheckedChange={(v) => update(i, { enabled: !!v })} className="mt-1" />
-                <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <c.icon className="size-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">{c.label}</div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground mr-1">Priority {i + 1}</span>
-                      <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, -1)} disabled={i === 0}><ChevronUp className="size-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, 1)} disabled={i === cats.length - 1}><ChevronDown className="size-3.5" /></Button>
-                    </div>
+          {loadingStatuses && cats.length === 0 && (
+            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+              <Loader2 className="size-4 mr-2 animate-spin" /> Loading statuses…
+            </div>
+          )}
+          {cats.map((c, i) => {
+            const meta = rowMeta(c);
+            const Icon = iconFor(meta.category);
+            return (
+              <Card key={c.rowId} className={`p-4 transition-all ${c.enabled ? "border-primary/40" : "opacity-60"}`}>
+                <div className="flex items-start gap-3">
+                  <Checkbox checked={c.enabled} onCheckedChange={(v) => update(i, { enabled: !!v })} className="mt-1" />
+                  <div
+                    className="size-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${meta.color}1f`, color: meta.color }}
+                  >
+                    <Icon className="size-4" />
                   </div>
-                  {c.enabled && (
-                    <div className="grid grid-cols-3 gap-2 mt-3">
-                      <div>
-                        <Label className="text-[10px] uppercase text-muted-foreground">From</Label>
-                        <Input type="date" value={c.fromDate} onChange={(e) => update(i, { fromDate: e.target.value })} className="h-8" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <Select value={c.statusId} onValueChange={(v) => update(i, { statusId: v })}>
+                          <SelectTrigger className="h-8 font-medium">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {statuses.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
+                                  {s.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                            <SelectItem value={FOLLOWUP_KEY}>
+                              <span className="inline-flex items-center gap-2">
+                                <Tag className="size-3" /> Follow-up — any open status
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div>
-                        <Label className="text-[10px] uppercase text-muted-foreground">To</Label>
-                        <Input type="date" value={c.toDate} onChange={(e) => update(i, { toDate: e.target.value })} className="h-8" />
-                      </div>
-                      <div>
-                        <Label className="text-[10px] uppercase text-muted-foreground">Attempts/day</Label>
-                        <Input type="number" min={1} max={5} value={c.attempts} onChange={(e) => update(i, { attempts: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })} className="h-8" />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-muted-foreground mr-1">Priority {i + 1}</span>
+                        <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, -1)} disabled={i === 0}><ChevronUp className="size-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="size-7" onClick={() => move(i, 1)} disabled={i === cats.length - 1}><ChevronDown className="size-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => removeRow(i)} disabled={cats.length === 1}><X className="size-3.5" /></Button>
                       </div>
                     </div>
-                  )}
+                    {c.enabled && (
+                      <div className="grid grid-cols-3 gap-2 mt-3">
+                        <div>
+                          <Label className="text-[10px] uppercase text-muted-foreground">From</Label>
+                          <Input type="date" value={c.fromDate} onChange={(e) => update(i, { fromDate: e.target.value })} className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] uppercase text-muted-foreground">To</Label>
+                          <Input type="date" value={c.toDate} onChange={(e) => update(i, { toDate: e.target.value })} className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] uppercase text-muted-foreground">Attempts/day</Label>
+                          <Input type="number" min={1} max={5} value={c.attempts} onChange={(e) => update(i, { attempts: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })} className="h-8" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addRow}
+            disabled={statuses.length === 0}
+            className="w-full border-dashed gap-2"
+          >
+            <Plus className="size-4" /> Add status row
+          </Button>
         </div>
         <DialogFooter className="mt-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
