@@ -151,10 +151,10 @@ function ImportPage() {
 
   function downloadSample() {
     const sample = [
-      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Notes", "Created Date", "Follow-up Date", "Assigned To", "Task Title", "Task Due Date", "Task Description"],
-      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Interested in premium plan", "08/05/2026", "15/05/2026", "priya@company.com", "Send proposal", "16/05/2026", "Email PDF quote"],
-      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Asked for callback", "10/05/2026", "12/05/2026", "Aman Gupta", "Callback", "12/05/2026", ""],
-      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "Sent quote on whatsapp", "12/05/2026", "", "", "", "", ""],
+      ["Name", "Phone", "Email", "Lead Source", "Sales Value", "Status", "Label", "Notes", "Created Date", "Follow-up Date", "Assigned To", "Task Title", "Task Due Date", "Task Description"],
+      ["Rahul Sharma", "9876543210", "rahul@example.com", "Website", "25000", "New", "Hot, Premium", "Interested in premium plan", "08/05/2026", "15/05/2026", "priya@company.com", "Send proposal", "16/05/2026", "Email PDF quote"],
+      ["Priya Verma", "9123456780", "priya@example.com", "Facebook", "0", "Contacted", "Warm", "Asked for callback", "10/05/2026", "12/05/2026", "Aman Gupta", "Callback", "12/05/2026", ""],
+      ["Aman Gupta", "9988776655", "", "WhatsApp", "50000", "Qualified", "", "Sent quote on whatsapp", "12/05/2026", "", "", "", "", ""],
     ];
     const csv = sample.map((row) =>
       row.map((c) => {
