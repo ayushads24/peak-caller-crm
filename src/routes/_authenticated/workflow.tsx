@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw } from "lucide-react";
+import { Phone, SkipForward, CheckCircle2, XCircle, Coffee, Play, Pause, Plus, MessageCircle, Loader2, Flame, CalendarRange, FileText, RotateCw, AlarmClock, StopCircle, Eye } from "lucide-react";
 import { CreateFlowModal, type FlowCategory } from "@/components/workflow/create-flow-modal";
 import { PostCallSheet } from "@/components/workflow/post-call-sheet";
+import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow, type ProfileLite } from "@/components/leads/lead-detail-sheet";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -18,7 +19,7 @@ interface Item {
   id: string; lead_id: string; category: FlowCategory; priority: number;
   attempts_planned: number; attempts_done: number; status: "pending" | "in_progress" | "done" | "skipped" | "rescheduled";
 }
-interface Lead { id: string; client_name: string; phone: string | null; email: string | null; status_id: string | null; sales_value: number | null; lead_source: string | null; }
+interface Lead { id: string; client_name: string; phone: string | null; email: string | null; status_id: string | null; sales_value: number | null; lead_source: string | null; created_at: string; assigned_to?: string | null; created_by?: string | null; }
 interface Status { id: string; name: string; color: string; }
 interface Brk { id: string; type: "lunch" | "tea" | "meeting" | "other"; started_at: string; ended_at: string | null; }
 
@@ -42,6 +43,15 @@ function Page() {
   const [postLead, setPostLead] = useState<Lead | null>(null);
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [autoMode, setAutoMode] = useState<"off" | "running" | "paused">("off");
+  const [dueTaskLeadIds, setDueTaskLeadIds] = useState<Set<string>>(new Set());
+  const [labels, setLabels] = useState<LabelRow[]>([]);
+  const [fullStatuses, setFullStatuses] = useState<StatusRow[]>([]);
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+  const [detailLead, setDetailLead] = useState<LeadRow | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const lastAutoCalledItemId = useRef<string | null>(null);
+  const flowStartedAt = useRef<number>(Date.now());
 
   useEffect(() => { if (user) void load(); }, [user]);
 
@@ -50,6 +60,13 @@ function Page() {
     const ch = supabase.channel("workflow-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "calling_flow_items" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "breaks", filter: `user_id=eq.${user.id}` }, () => loadBreak())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, (payload) => {
+        const row = payload.new as { id: string; client_name: string; created_at: string };
+        if (row?.created_at && new Date(row.created_at).getTime() >= flowStartedAt.current) {
+          toast.success(`New fresh lead: ${row.client_name}`, { icon: "✨" });
+        }
+        void load();
+      })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [user]);
@@ -68,19 +85,33 @@ function Page() {
     if (!flow) { setFlowId(null); setItems([]); setLeadsMap(new Map()); setLoading(false); return; }
     setFlowId(flow.id);
 
-    const [{ data: its }, { data: sts }, _b] = await Promise.all([
+    const [{ data: its }, { data: sts }, { data: lbls }, { data: profs }, _b] = await Promise.all([
       supabase.from("calling_flow_items").select("id, lead_id, category, priority, attempts_planned, attempts_done, status").eq("flow_id", flow.id).order("priority"),
-      supabase.from("statuses").select("id, name, color").order("sort_order"),
+      supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
+      supabase.from("labels").select("id, name, color"),
+      supabase.from("profiles").select("id, full_name, email"),
       loadBreak(),
     ]);
     setItems((its ?? []) as Item[]);
     setStatuses((sts ?? []) as Status[]);
+    setFullStatuses((sts ?? []) as StatusRow[]);
+    setLabels((lbls ?? []) as LabelRow[]);
+    setProfiles((profs ?? []) as ProfileLite[]);
 
     const ids = (its ?? []).map((i) => i.lead_id);
     if (ids.length) {
-      const { data: leads } = await supabase.from("leads").select("id, client_name, phone, email, status_id, sales_value, lead_source").in("id", ids);
+      const { data: leads } = await supabase.from("leads").select("id, client_name, phone, email, status_id, sales_value, lead_source, created_at, assigned_to, created_by").in("id", ids);
       setLeadsMap(new Map((leads ?? []).map((l) => [l.id, l as Lead])));
-    } else setLeadsMap(new Map());
+      // Tasks due today or earlier, still open
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const { data: dueTasks } = await supabase
+        .from("tasks")
+        .select("lead_id")
+        .in("lead_id", ids)
+        .neq("status", "completed")
+        .lte("due_date", todayEnd.toISOString());
+      setDueTaskLeadIds(new Set((dueTasks ?? []).map((t) => t.lead_id as string)));
+    } else { setLeadsMap(new Map()); setDueTaskLeadIds(new Set()); }
     setLoading(false);
   }
 
@@ -94,6 +125,23 @@ function Page() {
     skipped: items.filter((i) => i.status === "skipped").length,
     pending: queue.length,
   }), [items, queue.length]);
+
+  function leadTag(l: Lead | undefined): "new" | "task" | null {
+    if (!l) return null;
+    if (dueTaskLeadIds.has(l.id)) return "task";
+    const ageH = (Date.now() - new Date(l.created_at).getTime()) / 36e5;
+    if (ageH <= 24) return "new";
+    return null;
+  }
+
+  function openDetail(l: Lead) {
+    setDetailLead({
+      id: l.id, client_name: l.client_name, email: l.email, phone: l.phone,
+      sales_value: l.sales_value, lead_source: l.lead_source, status_id: l.status_id,
+      created_at: l.created_at, assigned_to: l.assigned_to ?? null, created_by: l.created_by ?? null,
+    });
+    setDetailOpen(true);
+  }
 
   async function startCall() {
     if (!current || !currentLead) return;
@@ -136,6 +184,23 @@ function Page() {
     if (!activeBreak) return;
     await supabase.from("breaks").update({ ended_at: new Date().toISOString() }).eq("id", activeBreak.id);
   }
+
+  // Auto-mode: when current lead changes and auto is running, trigger call
+  useEffect(() => {
+    if (autoMode !== "running" || activeBreak || postOpen || !current || !currentLead) return;
+    if (lastAutoCalledItemId.current === current.id) return;
+    lastAutoCalledItemId.current = current.id;
+    const t = setTimeout(() => { void startCall(); }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoMode, activeBreak, postOpen, current?.id]);
+
+  function toggleAuto() {
+    if (autoMode === "off") { flowStartedAt.current = Date.now(); setAutoMode("running"); toast.success("Auto-calling started"); }
+    else if (autoMode === "running") { setAutoMode("paused"); toast.message("Auto-calling paused"); }
+    else if (autoMode === "paused") { setAutoMode("running"); toast.success("Auto-calling resumed"); }
+  }
+  function endAuto() { setAutoMode("off"); lastAutoCalledItemId.current = null; toast.message("Auto-calling stopped"); }
 
   if (loading) {
     return <div className="min-h-[60vh] grid place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>;
@@ -181,8 +246,31 @@ function Page() {
             </Select>
           )}
           <Button variant="outline" onClick={() => setCreateOpen(true)}><Plus className="size-4 mr-1" />New workflow</Button>
+          {autoMode === "off" ? (
+            <Button onClick={toggleAuto} className="bg-gradient-primary shadow-glow" disabled={!current || !!activeBreak}><Play className="size-4 mr-1" />Start Workflow</Button>
+          ) : autoMode === "running" ? (
+            <>
+              <Button onClick={toggleAuto} variant="outline" className="border-amber-500/40 text-amber-600 hover:text-amber-700"><Pause className="size-4 mr-1" />Pause</Button>
+              <Button onClick={endAuto} variant="outline" className="text-destructive hover:text-destructive"><StopCircle className="size-4 mr-1" />End</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={toggleAuto} className="bg-gradient-primary"><Play className="size-4 mr-1" />Resume</Button>
+              <Button onClick={endAuto} variant="outline" className="text-destructive hover:text-destructive"><StopCircle className="size-4 mr-1" />End</Button>
+            </>
+          )}
         </div>
       </div>
+
+      {autoMode !== "off" && (
+        <div className="mb-4 flex items-center gap-2">
+          <Badge className={`border-0 gap-1 ${autoMode === "running" ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>
+            <span className={`size-2 rounded-full bg-white ${autoMode === "running" ? "animate-pulse" : ""}`} />
+            Auto-calling {autoMode === "running" ? "ON" : "PAUSED"}
+          </Badge>
+          <span className="text-xs text-muted-foreground">Next lead opens automatically after each call.</span>
+        </div>
+      )}
 
       {activeBreak && (
         <Card className="p-4 mb-4 border-amber-500/40 bg-amber-500/5">
@@ -214,6 +302,9 @@ function Page() {
                     {currentLead.email && <div>✉️ {currentLead.email}</div>}
                     {currentLead.lead_source && <div>Source: {currentLead.lead_source}</div>}
                   </div>
+                  <Button variant="link" size="sm" className="px-0 h-auto mt-1 text-primary" onClick={() => openDetail(currentLead)}>
+                    <Eye className="size-3.5 mr-1" />View full details
+                  </Button>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Attempt</div>
@@ -253,15 +344,37 @@ function Page() {
               const l = leadsMap.get(i.lead_id);
               if (!l) return null;
               const meta = CAT_META[i.category];
+              const tag = leadTag(l);
+              const tagClasses = tag === "new"
+                ? "border-orange-400/60 bg-orange-500/10"
+                : tag === "task"
+                ? "border-yellow-400/60 bg-yellow-500/10"
+                : "";
               return (
-                <div key={i.id} className="flex items-center gap-2 rounded-lg border p-2.5 text-sm">
+                <button
+                  key={i.id}
+                  onClick={() => openDetail(l)}
+                  className={`w-full text-left flex items-center gap-2 rounded-lg border p-2.5 text-sm hover:bg-muted/50 transition-colors ${tagClasses}`}
+                >
                   <span className="size-2 rounded-full shrink-0" style={{ background: meta.color }} />
                   <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{l.client_name}</div>
+                    <div className="truncate font-medium flex items-center gap-1.5">
+                      {l.client_name}
+                      {tag === "new" && (
+                        <Badge className="border-0 bg-orange-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
+                          <span className="size-1.5 rounded-full bg-white animate-pulse" />NEW
+                        </Badge>
+                      )}
+                      {tag === "task" && (
+                        <Badge className="border-0 bg-yellow-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
+                          <AlarmClock className="size-2.5" />Task Due
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-[10px] text-muted-foreground truncate">{meta.label} · {l.phone ?? "no phone"}</div>
                   </div>
                   <span className="text-[10px] text-muted-foreground shrink-0">{i.attempts_done}/{i.attempts_planned}</span>
-                </div>
+                </button>
               );
             })}
             {queue.length <= 1 && <p className="text-xs text-muted-foreground text-center py-4">Queue empty.</p>}
@@ -271,6 +384,15 @@ function Page() {
 
       <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} />
       <PostCallSheet open={postOpen} onOpenChange={setPostOpen} lead={postLead} statuses={statuses} durationStartedAt={callStartedAt} onComplete={() => { setCallStartedAt(null); void advance(); }} />
+      <LeadDetailSheet
+        lead={detailLead}
+        statuses={fullStatuses}
+        labels={labels}
+        profiles={profiles}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onChanged={() => load()}
+      />
     </div>
   );
 }
