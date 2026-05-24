@@ -601,6 +601,12 @@ function Page() {
           if (idx < 0 || idx >= pageLeads.length - 1) return undefined;
           return () => setActive(pageLeads[idx + 1]);
         })()}
+        onPrev={(() => {
+          if (!active) return undefined;
+          const idx = pageLeads.findIndex((l) => l.id === active.id);
+          if (idx <= 0) return undefined;
+          return () => setActive(pageLeads[idx - 1]);
+        })()}
       />
     </div>
   );
