@@ -246,8 +246,31 @@ function Page() {
             </Select>
           )}
           <Button variant="outline" onClick={() => setCreateOpen(true)}><Plus className="size-4 mr-1" />New workflow</Button>
+          {autoMode === "off" ? (
+            <Button onClick={toggleAuto} className="bg-gradient-primary shadow-glow" disabled={!current || !!activeBreak}><Play className="size-4 mr-1" />Start Workflow</Button>
+          ) : autoMode === "running" ? (
+            <>
+              <Button onClick={toggleAuto} variant="outline" className="border-amber-500/40 text-amber-600 hover:text-amber-700"><Pause className="size-4 mr-1" />Pause</Button>
+              <Button onClick={endAuto} variant="outline" className="text-destructive hover:text-destructive"><StopCircle className="size-4 mr-1" />End</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={toggleAuto} className="bg-gradient-primary"><Play className="size-4 mr-1" />Resume</Button>
+              <Button onClick={endAuto} variant="outline" className="text-destructive hover:text-destructive"><StopCircle className="size-4 mr-1" />End</Button>
+            </>
+          )}
         </div>
       </div>
+
+      {autoMode !== "off" && (
+        <div className="mb-4 flex items-center gap-2">
+          <Badge className={`border-0 gap-1 ${autoMode === "running" ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>
+            <span className={`size-2 rounded-full bg-white ${autoMode === "running" ? "animate-pulse" : ""}`} />
+            Auto-calling {autoMode === "running" ? "ON" : "PAUSED"}
+          </Badge>
+          <span className="text-xs text-muted-foreground">Next lead opens automatically after each call.</span>
+        </div>
+      )}
 
       {activeBreak && (
         <Card className="p-4 mb-4 border-amber-500/40 bg-amber-500/5">
