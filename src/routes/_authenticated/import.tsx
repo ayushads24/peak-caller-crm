@@ -279,18 +279,20 @@ function ImportPage() {
 
   const validation = useMemo(() => {
     const seen = new Set<string>();
-    let valid = 0, dupExisting = 0, dupInFile = 0, missingRequired = 0;
+    const hasCreatedDateMapping = Object.values(mapping).includes("created_at");
+    let valid = 0, dupExisting = 0, dupInFile = 0, missingRequired = 0, badCreatedDate = 0;
     for (const r of preview) {
       const name = String(r.client_name ?? "").trim();
       const phone = normalizePhone(r.phone);
       if (!name || !phone) { missingRequired++; continue; }
       if (existingPhones.has(phone)) { dupExisting++; continue; }
       if (seen.has(phone)) { dupInFile++; continue; }
+      if (!r.created_at || !parseFlexibleDate(r.created_at)) { badCreatedDate++; continue; }
       seen.add(phone);
       valid++;
     }
-    return { valid, dupExisting, dupInFile, missingRequired, total: preview.length };
-  }, [preview, existingPhones]);
+    return { valid, dupExisting, dupInFile, missingRequired, badCreatedDate, hasCreatedDateMapping, total: preview.length };
+  }, [preview, existingPhones, mapping]);
 
   async function runImport() {
     if (!user) return;
@@ -376,6 +378,10 @@ function ImportPage() {
     let duplicates = 0;
     const errors: { row: number; reason: string }[] = [];
 
+    if (!validation.hasCreatedDateMapping) {
+      errors.push({ row: 0, reason: "Created Date / Created On column mapping is mandatory" });
+    }
+
     preview.forEach((r, i) => {
       const name = String(r.client_name ?? "").trim();
       const phone = normalizePhone(r.phone);
@@ -383,8 +389,9 @@ function ImportPage() {
       if (existingPhones.has(phone) || seen.has(phone)) { duplicates++; return; }
       seen.add(phone);
       const createdAt = parseFlexibleDate(r.created_at);
-      if (r.created_at && !createdAt) {
-        errors.push({ row: i + 2, reason: `Created On parse नहीं हुआ: ${String(r.created_at)}` });
+      if (!r.created_at || !createdAt) {
+        errors.push({ row: i + 2, reason: r.created_at ? `Created On parse नहीं हुआ: ${String(r.created_at)}` : "Created On missing" });
+        return;
       }
       const followUp = parseFlexibleDate(r.follow_up);
       const taskDue = parseFlexibleDate(r.task_due_date);
@@ -408,11 +415,9 @@ function ImportPage() {
         created_by: user.id,
         assigned_to: assignedTo,
         imported_at: new Date().toISOString(),
+        created_at: createdAt.toISOString(),
+        updated_at: createdAt.toISOString(),
       };
-      if (createdAt) {
-        payload.created_at = createdAt.toISOString();
-        payload.updated_at = createdAt.toISOString();
-      }
       toInsert.push({
         payload,
         notes: buildCombinedNotes(r),
