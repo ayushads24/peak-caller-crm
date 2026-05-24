@@ -20,10 +20,19 @@ import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/
 import { LeadsFilterBar, EMPTY_FILTERS, type LeadFilters, type ProfileLite } from "@/components/leads/leads-filter-bar";
 import type { MovementEvent } from "@/components/leads/leads-analytics-strip";
 
-export const Route = createFileRoute("/_authenticated/leads")({ component: Page });
+export const Route = createFileRoute("/_authenticated/leads")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    status: typeof s.status === "string" ? s.status : undefined,
+    assigned: typeof s.assigned === "string" ? s.assigned : undefined,
+    from: typeof s.from === "string" ? s.from : undefined,
+    to: typeof s.to === "string" ? s.to : undefined,
+  }),
+  component: Page,
+});
 
 function Page() {
   const { user } = useAuth();
+  const search = Route.useSearch();
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [labels, setLabels] = useState<LabelRow[]>([]);
@@ -34,6 +43,19 @@ function Page() {
   const [followups, setFollowups] = useState<Map<string, Date>>(new Map());
   const [movements, setMovements] = useState<MovementEvent[]>([]);
   const [filters, setFilters] = useState<LeadFilters>(EMPTY_FILTERS);
+
+  // Hydrate filters from URL once on mount (e.g. when navigated from Dashboard → Status Movement card)
+  useEffect(() => {
+    if (!search.status && !search.assigned && !search.from && !search.to) return;
+    setFilters((f) => ({
+      ...f,
+      statusIds: search.status ? [search.status] : f.statusIds,
+      assignedTo: search.assigned ?? f.assignedTo,
+      dateFrom: search.from ? new Date(search.from) : f.dateFrom,
+      dateTo: search.to ? new Date(search.to) : f.dateTo,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [active, setActive] = useState<LeadRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
