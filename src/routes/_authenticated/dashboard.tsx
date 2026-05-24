@@ -48,7 +48,6 @@ function Page() {
   const [smLoading, setSmLoading] = useState(true);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [createFlowOpen, setCreateFlowOpen] = useState(false);
   const [punchOutGuard, setPunchOutGuard] = useState<{ pending: number } | null>(null);
