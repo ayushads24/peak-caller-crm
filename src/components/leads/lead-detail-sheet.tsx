@@ -16,6 +16,12 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Mail,
   Phone,
   Trash2,
@@ -28,6 +34,8 @@ import {
   Tag,
   MessageCircle,
   ChevronRight,
+  ChevronLeft,
+  MoreHorizontal,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -72,6 +80,7 @@ export function LeadDetailSheet({
   onOpenChange,
   onChanged,
   onNext,
+  onPrev,
 }: {
   lead: LeadRow | null;
   statuses: StatusRow[];
@@ -81,6 +90,7 @@ export function LeadDetailSheet({
   onOpenChange: (v: boolean) => void;
   onChanged: () => void;
   onNext?: () => void;
+  onPrev?: () => void;
 }) {
   const { user } = useAuth();
   const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
@@ -102,11 +112,24 @@ export function LeadDetailSheet({
   const [taskDue, setTaskDue] = useState("");
   const [taskAssignee, setTaskAssignee] = useState<string>("");
   const [edit, setEdit] = useState<LeadRow | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setEdit(lead);
     if (lead) void loadRelated(lead.id);
   }, [lead]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowRight" && onNext) onNext();
+      if (e.key === "ArrowLeft" && onPrev) onPrev();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onNext, onPrev]);
 
   async function loadRelated(id: string) {
     const [n, t, a, ll] = await Promise.all([
@@ -137,6 +160,7 @@ export function LeadDetailSheet({
 
   async function save() {
     if (!edit) return;
+    setSaving(true);
     const { error } = await supabase
       .from("leads")
       .update({
@@ -149,6 +173,7 @@ export function LeadDetailSheet({
         assigned_to: edit.assigned_to ?? null,
       })
       .eq("id", edit.id);
+    setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Lead updated");
     onChanged();
@@ -229,61 +254,130 @@ export function LeadDetailSheet({
   const assignedLabels = labels.filter((l) => leadLabelIds.includes(l.id));
   const availableLabels = labels.filter((l) => !leadLabelIds.includes(l.id));
   const cleanPhone = (edit.phone ?? "").replace(/\D/g, "");
-  const hasQuickActions = Boolean(edit.phone || edit.email);
+  const assignedProfile = profiles.find((p) => p.id === edit.assigned_to);
+  const dirty =
+    !!lead &&
+    (edit.client_name !== lead.client_name ||
+      (edit.email ?? "") !== (lead.email ?? "") ||
+      (edit.phone ?? "") !== (lead.phone ?? "") ||
+      (edit.sales_value ?? null) !== (lead.sales_value ?? null) ||
+      (edit.lead_source ?? "") !== (lead.lead_source ?? "") ||
+      (edit.status_id ?? "") !== (lead.status_id ?? "") ||
+      (edit.assigned_to ?? "") !== (lead.assigned_to ?? ""));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0">
-        <SheetHeader className="px-5 pt-5">
-          <SheetTitle className="font-display text-xl flex items-center gap-2 min-w-0">
-            <span className="truncate">{edit.client_name}</span>
-            {status && (
-              <Badge style={{ background: status.color, color: "white" }} className="border-0">
-                {status.name}
-              </Badge>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto h-7 px-2 text-xs shrink-0"
-              onClick={onNext}
-              disabled={!onNext}
-            >
-              Next <ChevronRight className="size-3.5 ml-1" />
-            </Button>
-          </SheetTitle>
-        </SheetHeader>
-        <div className="px-5 pb-5">
-          {hasQuickActions && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
-              {edit.phone && (
-                <Button asChild variant="outline" size="sm" className="justify-start">
-                  <a href={`tel:${edit.phone}`}>
-                    <Phone className="size-3.5 mr-2" />
-                    Call
-                  </a>
+      <SheetContent className="w-full sm:max-w-xl lg:max-w-5xl overflow-hidden p-0 flex flex-col">
+        {/* Sticky header */}
+        <SheetHeader className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b px-5 pt-5 pb-3 space-y-3">
+          <SheetTitle asChild>
+            <div className="flex items-center gap-3 min-w-0">
+              <Avatar name={edit.client_name} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-display text-xl truncate">{edit.client_name}</span>
+                  {status && (
+                    <Badge
+                      style={{
+                        background: `${status.color}1a`,
+                        color: status.color,
+                        borderColor: `${status.color}33`,
+                      }}
+                      className="border font-medium"
+                    >
+                      {status.name}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  Created {formatDistanceToNow(new Date(edit.created_at), { addSuffix: true })}
+                  {assignedProfile && (
+                    <> · Owner: {assignedProfile.full_name || assignedProfile.email}</>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onPrev}
+                  disabled={!onPrev}
+                  title="Previous (←)"
+                >
+                  <ChevronLeft className="size-4" />
                 </Button>
-              )}
-              {cleanPhone && (
-                <Button asChild variant="outline" size="sm" className="justify-start">
-                  <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer">
-                    <MessageCircle className="size-3.5 mr-2" />
-                    WhatsApp
-                  </a>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onNext}
+                  disabled={!onNext}
+                  title="Next (→)"
+                >
+                  <ChevronRight className="size-4" />
                 </Button>
-              )}
-              {edit.email && (
-                <Button asChild variant="outline" size="sm" className="justify-start">
-                  <a href={`mailto:${edit.email}`}>
-                    <Mail className="size-3.5 mr-2" />
-                    Email
-                  </a>
-                </Button>
-              )}
+              </div>
             </div>
-          )}
-          {/* Lead details first */}
-          <div className="space-y-3 mt-4">
+          </SheetTitle>
+
+          {/* Quick actions + save row */}
+          <div className="flex items-center gap-2">
+            <div className="grid grid-cols-3 gap-1.5 flex-1">
+              <QuickAction
+                href={edit.phone ? `tel:${edit.phone}` : undefined}
+                icon={<Phone className="size-3.5" />}
+                label="Call"
+                tone="text-sky-600"
+              />
+              <QuickAction
+                href={cleanPhone ? `https://wa.me/${cleanPhone}` : undefined}
+                external
+                icon={<MessageCircle className="size-3.5" />}
+                label="WhatsApp"
+                tone="text-emerald-600"
+              />
+              <QuickAction
+                href={edit.email ? `mailto:${edit.email}` : undefined}
+                icon={<Mail className="size-3.5" />}
+                label="Email"
+                tone="text-indigo-600"
+              />
+            </div>
+            <Button
+              onClick={save}
+              disabled={!dirty || saving}
+              size="sm"
+              className="bg-gradient-primary h-9"
+            >
+              <Check className="size-4 mr-1" />
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={deleteLead}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="size-4 mr-2" />
+                  Delete lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </SheetHeader>
+
+        {/* Two-column body */}
+        <div className="grid lg:grid-cols-[1fr_380px] flex-1 overflow-hidden">
+          {/* LEFT: form */}
+          <div className="overflow-y-auto px-5 py-5 space-y-6 lg:border-r">
+            <Section title="Contact">
+              <div className="space-y-3">
             <Field label="Name">
               <Input
                 value={edit.client_name}
@@ -302,6 +396,11 @@ export function LeadDetailSheet({
                 onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
               />
             </Field>
+              </div>
+            </Section>
+
+            <Section title="Deal">
+              <div className="space-y-3">
             <Field label="Sales value (₹)">
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -326,6 +425,11 @@ export function LeadDetailSheet({
                 onChange={(e) => setEdit({ ...edit, lead_source: e.target.value })}
               />
             </Field>
+              </div>
+            </Section>
+
+            <Section title="Pipeline">
+              <div className="space-y-3">
             <Field label="Status">
               <Select
                 value={edit.status_id ?? ""}
@@ -406,25 +510,14 @@ export function LeadDetailSheet({
                 )}
               </div>
             </Field>
-            <div className="flex gap-2 pt-2">
-              <Button onClick={save} className="flex-1 bg-gradient-primary">
-                <Check className="size-4 mr-1" />
-                Save changes
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={deleteLead}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
+              </div>
+            </Section>
           </div>
 
-          {/* Tabs BELOW the details */}
-          <Tabs defaultValue="notes" className="mt-4">
-            <TabsList className="grid grid-cols-3 w-full">
+          {/* RIGHT: activity rail */}
+          <div className="overflow-y-auto px-5 py-5 bg-muted/30">
+          <Tabs defaultValue="notes">
+            <TabsList className="grid grid-cols-3 w-full sticky top-0 z-10">
               <TabsTrigger value="notes">
                 <MessageSquare className="size-3.5 mr-1" />
                 Notes {notes.length}
@@ -471,17 +564,18 @@ export function LeadDetailSheet({
                   onChange={(e) => setTaskTitle(e.target.value)}
                   placeholder="Task title"
                 />
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Input
                     type="datetime-local"
                     value={taskDue}
                     onChange={(e) => setTaskDue(e.target.value)}
+                    className="flex-1 min-w-[140px]"
                   />
                   <Select
                     value={taskAssignee || "__me"}
                     onValueChange={(v) => setTaskAssignee(v === "__me" ? "" : v)}
                   >
-                    <SelectTrigger className="w-44">
+                    <SelectTrigger className="w-36">
                       <SelectValue placeholder="Assign to" />
                     </SelectTrigger>
                     <SelectContent>
@@ -555,6 +649,7 @@ export function LeadDetailSheet({
               </div>
             </TabsContent>
           </Tabs>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -564,8 +659,85 @@ export function LeadDetailSheet({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
       {children}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="font-display text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function QuickAction({
+  href,
+  icon,
+  label,
+  tone,
+  external,
+}: {
+  href?: string;
+  icon: React.ReactNode;
+  label: string;
+  tone?: string;
+  external?: boolean;
+}) {
+  if (!href) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="h-9 justify-center gap-1.5 opacity-50"
+      >
+        <span className={tone}>{icon}</span>
+        <span className="text-xs">{label}</span>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      asChild
+      variant="outline"
+      size="sm"
+      className="h-9 justify-center gap-1.5 hover:bg-accent"
+    >
+      <a
+        href={href}
+        {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
+      >
+        <span className={tone}>{icon}</span>
+        <span className="text-xs">{label}</span>
+      </a>
+    </Button>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return (
+    <div
+      className="size-10 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0"
+      style={{ background: `hsl(${hue} 65% 50%)` }}
+    >
+      {initials || "?"}
     </div>
   );
 }
