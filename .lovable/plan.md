@@ -1,24 +1,99 @@
-Issue pakka mil gaya:
+# Lead Distribution Management Module
 
-- Himanshu `himanshu1050@gmail.com` ke naam par aaj ka workflow exist karta hai, but usme `0` items hain.
-- Himanshu ke paas 26 assigned leads hain, sab `Fresh` status me hain.
-- Isliye `/workflow` page “Workflow complete / 0 pending” dikha raha hai, actual queue nahi.
-- Most likely pehle stale/empty workflow create ho gaya tha, aur current modal fresh leads ki date/status selection se queue nahi bana paya.
+CRM mein ek naya **Lead Distribution** system add karenge jisme admin/team leader new leads ko callers ke beech multiple strategies se distribute kar sake, full tracking ke saath.
 
-Implementation plan:
+## 1. Database Changes
 
-1. **Existing empty workflow repair**
-   - Aaj ke Himanshu workflow me uski 26 assigned Fresh leads ko `calling_flow_items` me add karunga.
-   - Priority order deterministic rakhenge aur attempts default `2`.
+### Naya table: `distribution_rules`
+Har team leader / admin apni rules save kar sake.
+- `name` (text)
+- `team_id` (uuid, nullable — null = global)
+- `method` (enum: `round_robin`, `manual`, `percentage`, `priority`, `source`, `availability`)
+- `is_active` (boolean)
+- `config` (jsonb) — method-specific settings:
+  - percentage: `{ "user_id": 40, "user_id": 30, ... }`
+  - priority: `{ "high": ["user_id"], "normal": [...], "hot": [...] }`
+  - source: `{ "Instagram": ["user_id"], "Website": [...] }`
+  - round_robin: `{ "members": ["user_id", ...], "last_assigned_index": 0 }`
+- `created_by`, `created_at`, `updated_at`
 
-2. **Prevent repeat issue in UI**
-   - `CreateFlowModal` me jab team leader member ke liye workflow create kare, default date range ko today-only ke bajay member ke assigned leads ki actual date range cover karne layak make karunga.
-   - Empty replacement se bachane ke liye existing workflow delete/replace sirf tab hoga jab queue successfully build ho chuki ho.
+### Naya table: `lead_assignment_history`
+Har reassignment ka full audit trail.
+- `lead_id`, `from_user_id` (nullable for first assign), `to_user_id`
+- `assigned_by` (uuid — kisne kiya), `method` (enum: same as above + `system`)
+- `reason` (text, nullable), `created_at`
 
-3. **Member workflow page visibility**
-   - `/workflow` already `calling_flows.user_id = logged-in user` se load karta hai; once items exist, Himanshu ko queue show hogi.
-   - No route/page permission changes needed.
+### `leads` table additions
+- `priority` (enum: `low`, `normal`, `high`, `hot`) — default `normal`
+- `assigned_at` (timestamptz) — current owner since when
 
-4. **Verify**
-   - Database me confirm karunga ki Himanshu ke today flow me 26 items aa gaye.
-   - Code-level check karunga ki modal future me same empty workflow create na kare.
+### Trigger
+- `leads` table par AFTER UPDATE OF assigned_to → automatically `lead_assignment_history` row insert kare.
+
+### Existing `attendance` / `breaks` use karenge
+Availability detect karne ke liye — punched-in + no active break = available.
+
+## 2. Server Functions (createServerFn)
+
+`src/lib/lead-distribution.functions.ts`:
+- `getDistributionRules` — team leader/admin ki rules list
+- `saveDistributionRule` — create/update rule
+- `deleteDistributionRule`
+- `distributeLeads({ leadIds, ruleId })` — selected method apply karke leads assign kare
+- `bulkReassign({ leadIds, toUserId, reason })` — manual transfer
+- `bulkSplitEqual({ leadIds, userIds })` — equal split
+- `bulkSplitPercentage({ leadIds, distribution })` — percentage split
+- `getDistributionDashboard({ teamId, date })` — counters
+- `getLeadAssignmentHistory({ leadId })`
+
+Saare functions `requireSupabaseAuth` middleware ke saath, RLS enforce karega.
+
+## 3. Naye Pages / Routes
+
+### `/lead-distribution` (Team Leader + Admin)
+Tabs:
+- **Dashboard** — counters cards (Unassigned, Auto-assigned today, Manual-assigned today, Pending, Caller-wise list, Source-wise list)
+- **Rules** — distribution rules ka CRUD (method select karo, config form dynamic by method)
+- **Bulk Assign** — leads table with multi-select + actions dropdown (Transfer to / Split equally / Split by % / Change priority)
+- **History** — lead assignment history ka filterable log
+
+### `/leads/$id` page mein new section
+"Assignment History" timeline — kisne kab kisko assign kiya.
+
+## 4. Distribution Logic (server-side)
+
+Har method ka pure function:
+- **Round Robin**: rule config se members + last_index lekar cycle kare, config update kare
+- **Manual**: simple bulk update
+- **Percentage**: total count × % = count per user, deterministic order
+- **Priority**: lead priority dekh ke matching user pool se round-robin
+- **Source**: `lead_source` field match karke pool se round-robin
+- **Availability**: query active `attendance` (punched in, no open break) → un members mein round-robin
+
+## 5. UI Components
+
+- `DistributionRuleForm` — method-aware (dynamic config UI)
+- `BulkAssignDialog` — leads selection + method picker
+- `DistributionDashboardCards` — counters
+- `AssignmentHistoryTimeline` — lead detail page mein
+- `LeadPrioritySelector` — chip-style picker (low/normal/high/hot)
+
+Sidebar mein "Lead Distribution" entry (permission key: `leads.distribute`).
+
+## 6. Permissions
+
+Naya permission key: `leads.distribute` — admin, manager, team_leader roles ko default mein assign karenge `role_permissions` mein.
+
+## 7. Technical Notes
+
+- Saare bulk operations ek hi transaction-style serverFn call mein (loop with single supabase client) — failures par partial success report.
+- Distribution dashboard realtime: `leads` table par supabase channel subscribe karke counters refresh.
+- History trigger SECURITY DEFINER hoga taaki RLS na tode.
+- `auth.uid()` se `assigned_by` history mein capture hoga.
+
+## Out of Scope (abhi nahi)
+- Auto-distribution on lead import (manual trigger se chalega, future mein webhook/trigger add kar sakte hain)
+- SLA-based escalation
+- Lead recycling (stale leads auto-return)
+
+Bata do agar koi point change/add karna ho — phir build mode mein implement karta hoon.

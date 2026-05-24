@@ -21,6 +21,7 @@ import { Route as AuthenticatedTeamWorkflowsRouteImport } from './routes/_authen
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedMyTasksRouteImport } from './routes/_authenticated/my-tasks'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
+import { Route as AuthenticatedLeadDistributionRouteImport } from './routes/_authenticated/lead-distribution'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -87,6 +88,12 @@ const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedLeadDistributionRoute =
+  AuthenticatedLeadDistributionRouteImport.update({
+    id: '/lead-distribution',
+    path: '/lead-distribution',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedIntegrationsRoute =
   AuthenticatedIntegrationsRouteImport.update({
     id: '/integrations',
@@ -125,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/import': typeof AuthenticatedImportRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
+  '/lead-distribution': typeof AuthenticatedLeadDistributionRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -143,6 +151,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/import': typeof AuthenticatedImportRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
+  '/lead-distribution': typeof AuthenticatedLeadDistributionRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/my-tasks': typeof AuthenticatedMyTasksRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -163,6 +172,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
+  '/_authenticated/lead-distribution': typeof AuthenticatedLeadDistributionRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/my-tasks': typeof AuthenticatedMyTasksRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/import'
     | '/integrations'
+    | '/lead-distribution'
     | '/leads'
     | '/my-tasks'
     | '/settings'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/import'
     | '/integrations'
+    | '/lead-distribution'
     | '/leads'
     | '/my-tasks'
     | '/settings'
@@ -220,6 +232,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/import'
     | '/_authenticated/integrations'
+    | '/_authenticated/lead-distribution'
     | '/_authenticated/leads'
     | '/_authenticated/my-tasks'
     | '/_authenticated/settings'
@@ -327,6 +340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/lead-distribution': {
+      id: '/_authenticated/lead-distribution'
+      path: '/lead-distribution'
+      fullPath: '/lead-distribution'
+      preLoaderRoute: typeof AuthenticatedLeadDistributionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/integrations': {
       id: '/_authenticated/integrations'
       path: '/integrations'
@@ -369,6 +389,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
+  AuthenticatedLeadDistributionRoute: typeof AuthenticatedLeadDistributionRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedMyTasksRoute: typeof AuthenticatedMyTasksRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -381,6 +402,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
+  AuthenticatedLeadDistributionRoute: AuthenticatedLeadDistributionRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedMyTasksRoute: AuthenticatedMyTasksRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
