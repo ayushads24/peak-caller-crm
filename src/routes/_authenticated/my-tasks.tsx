@@ -39,7 +39,7 @@ import {
   List as ListIcon,
   AlertTriangle,
 } from "lucide-react";
-import { isToday, isPast, isFuture, isSameDay } from "date-fns";
+import { isSameDay } from "date-fns";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
