@@ -78,7 +78,7 @@ function Page() {
   useEffect(() => {
     if (!user) return;
     void (async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, email").order("full_name");
+      const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email").order("full_name");
       setProfiles((data ?? []) as ProfileLite[]);
     })();
   }, [user]);
