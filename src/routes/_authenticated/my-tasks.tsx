@@ -183,7 +183,9 @@ function Page() {
   }, [tasks]);
 
   const dayTasks = useMemo(() => {
-    return tasks.filter((t) => t.due_date && isSameDay(new Date(t.due_date), selectedDate));
+    return tasks.filter(
+      (t) => t.due_date && isSameDay(istWall(t.due_date), istWall(selectedDate)),
+    );
   }, [tasks, selectedDate]);
 
   const calendarModifiers = useMemo(() => {
@@ -193,10 +195,11 @@ function Page() {
     const done: Date[] = [];
     for (const [key, arr] of tasksByDay.entries()) {
       const d = new Date(key);
+      const todayKey = fmtIST(new Date(), "yyyy-MM-dd");
       const hasDone = arr.some((t) => t.status === "completed");
-      const hasOverdue = arr.some((t) => t.status !== "completed" && isPast(new Date(t.due_date!)) && !isToday(new Date(t.due_date!)));
-      const hasToday = arr.some((t) => t.status !== "completed" && isToday(new Date(t.due_date!)));
-      const hasUpcoming = arr.some((t) => t.status !== "completed" && isFuture(new Date(t.due_date!)));
+      const hasOverdue = arr.some((t) => t.status !== "completed" && key < todayKey);
+      const hasToday = arr.some((t) => t.status !== "completed" && key === todayKey);
+      const hasUpcoming = arr.some((t) => t.status !== "completed" && key > todayKey);
       if (hasOverdue) overdue.push(d);
       else if (hasToday) today.push(d);
       else if (hasUpcoming) upcoming.push(d);
