@@ -39,7 +39,8 @@ import {
   List as ListIcon,
   AlertTriangle,
 } from "lucide-react";
-import { format, isToday, isPast, isFuture, startOfDay, endOfDay, isSameDay } from "date-fns";
+import { isToday, isPast, isFuture, isSameDay } from "date-fns";
+import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,12 @@ interface ProfileLite { id: string; full_name: string | null; email: string | nu
 
 type FilterKey = "today" | "upcoming" | "overdue" | "completed";
 
+const IST_TZ = "Asia/Kolkata";
+const fmtIST = (d: Date | string, pattern: string) => formatInTimeZone(new Date(d), IST_TZ, pattern);
+/** Date object whose local Y/M/D/H/M equals the IST wall-clock of `d`. Useful for comparison helpers like isToday/isPast that read local fields. */
+const istWall = (d: Date | string) => toZonedTime(new Date(d), IST_TZ);
+const nowIST = () => toZonedTime(new Date(), IST_TZ);
+
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
   high: { label: "High", color: "#dc2626", bg: "#fee2e2" },
   medium: { label: "Medium", color: "#d97706", bg: "#fef3c7" },
@@ -81,10 +88,11 @@ const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string
 function bucketOf(t: TaskRow): FilterKey | null {
   if (t.status === "completed") return "completed";
   if (!t.due_date) return "upcoming";
-  const d = new Date(t.due_date);
-  if (isToday(d)) return "today";
-  if (isPast(d)) return "overdue";
-  if (isFuture(d)) return "upcoming";
+  const d = istWall(t.due_date);
+  const now = nowIST();
+  if (isSameDay(d, now)) return "today";
+  if (d.getTime() < now.getTime()) return "overdue";
+  if (d.getTime() > now.getTime()) return "upcoming";
   return "upcoming";
 }
 
