@@ -175,7 +175,7 @@ function Page() {
     const m = new Map<string, TaskRow[]>();
     for (const t of tasks) {
       if (!t.due_date) continue;
-      const key = format(new Date(t.due_date), "yyyy-MM-dd");
+      const key = fmtIST(t.due_date, "yyyy-MM-dd");
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(t);
     }
@@ -275,7 +275,7 @@ function Page() {
           </Card>
           <Card className="p-3 shadow-card">
             <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="font-display font-semibold">{format(selectedDate, "EEEE, MMM d")}</h3>
+              <h3 className="font-display font-semibold">{fmtIST(selectedDate, "EEEE, MMM d")}</h3>
               <Badge variant="secondary">{dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</Badge>
             </div>
             {dayTasks.length === 0 ? (
@@ -404,7 +404,7 @@ function TaskItem({
             {due && (
               <span className="inline-flex items-center gap-1">
                 <CalendarClock className="size-3" />
-                {format(due, "MMM d, h:mm a")}
+                {fmtIST(due, "MMM d, h:mm a")} IST
               </span>
             )}
             {assignee && (
@@ -448,9 +448,8 @@ function TaskActionsDialog({
       setNote("");
       setPriority(task.priority);
       if (task.due_date) {
-        const d = new Date(task.due_date);
-        setReschedDate(format(d, "yyyy-MM-dd"));
-        setReschedTime(format(d, "HH:mm"));
+        setReschedDate(fmtIST(task.due_date, "yyyy-MM-dd"));
+        setReschedTime(fmtIST(task.due_date, "HH:mm"));
       } else {
         setReschedDate("");
         setReschedTime("");
@@ -477,7 +476,8 @@ function TaskActionsDialog({
   async function reschedule() {
     if (!task) return;
     if (!reschedDate) return toast.error("Pick a date");
-    const iso = new Date(`${reschedDate}T${reschedTime || "09:00"}`).toISOString();
+    // Interpret the picker values as IST wall-clock, then convert to UTC ISO.
+    const iso = fromZonedTime(`${reschedDate}T${reschedTime || "09:00"}:00`, IST_TZ).toISOString();
     setBusy(true);
     const { error } = await supabase
       .from("tasks")
