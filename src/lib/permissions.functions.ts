@@ -14,7 +14,8 @@ async function assertAdmin(userId: string) {
 
 export const listPermissions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
     const { data: perms } = await supabaseAdmin
       .from("permissions")
       .select("key, module, action, label, sort_order")
