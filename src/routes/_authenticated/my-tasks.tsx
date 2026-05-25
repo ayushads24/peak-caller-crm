@@ -350,8 +350,10 @@ function TaskItem({
   onOpen: () => void;
 }) {
   const due = task.due_date ? new Date(task.due_date) : null;
-  const isOverdue = task.status !== "completed" && due && isPast(due) && !isToday(due);
-  const isDueToday = task.status !== "completed" && due && isToday(due);
+  const dueIST = due ? istWall(due) : null;
+  const nowI = nowIST();
+  const isDueToday = task.status !== "completed" && dueIST && isSameDay(dueIST, nowI);
+  const isOverdue = task.status !== "completed" && dueIST && dueIST.getTime() < nowI.getTime() && !isDueToday;
   const prio = PRIORITY_META[task.priority];
 
   function call(e: React.MouseEvent) {
