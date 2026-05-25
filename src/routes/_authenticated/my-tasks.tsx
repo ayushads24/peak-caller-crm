@@ -39,7 +39,8 @@ import {
   List as ListIcon,
   AlertTriangle,
 } from "lucide-react";
-import { format, isToday, isPast, isFuture, startOfDay, endOfDay, isSameDay } from "date-fns";
+import { isSameDay } from "date-fns";
+import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,12 @@ interface ProfileLite { id: string; full_name: string | null; email: string | nu
 
 type FilterKey = "today" | "upcoming" | "overdue" | "completed";
 
+const IST_TZ = "Asia/Kolkata";
+const fmtIST = (d: Date | string, pattern: string) => formatInTimeZone(new Date(d), IST_TZ, pattern);
+/** Date object whose local Y/M/D/H/M equals the IST wall-clock of `d`. Useful for comparison helpers like isToday/isPast that read local fields. */
+const istWall = (d: Date | string) => toZonedTime(new Date(d), IST_TZ);
+const nowIST = () => toZonedTime(new Date(), IST_TZ);
+
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
   high: { label: "High", color: "#dc2626", bg: "#fee2e2" },
   medium: { label: "Medium", color: "#d97706", bg: "#fef3c7" },
@@ -81,10 +88,11 @@ const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string
 function bucketOf(t: TaskRow): FilterKey | null {
   if (t.status === "completed") return "completed";
   if (!t.due_date) return "upcoming";
-  const d = new Date(t.due_date);
-  if (isToday(d)) return "today";
-  if (isPast(d)) return "overdue";
-  if (isFuture(d)) return "upcoming";
+  const d = istWall(t.due_date);
+  const now = nowIST();
+  if (isSameDay(d, now)) return "today";
+  if (d.getTime() < now.getTime()) return "overdue";
+  if (d.getTime() > now.getTime()) return "upcoming";
   return "upcoming";
 }
 
@@ -167,7 +175,7 @@ function Page() {
     const m = new Map<string, TaskRow[]>();
     for (const t of tasks) {
       if (!t.due_date) continue;
-      const key = format(new Date(t.due_date), "yyyy-MM-dd");
+      const key = fmtIST(t.due_date, "yyyy-MM-dd");
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(t);
     }
@@ -175,7 +183,9 @@ function Page() {
   }, [tasks]);
 
   const dayTasks = useMemo(() => {
-    return tasks.filter((t) => t.due_date && isSameDay(new Date(t.due_date), selectedDate));
+    return tasks.filter(
+      (t) => t.due_date && isSameDay(istWall(t.due_date), istWall(selectedDate)),
+    );
   }, [tasks, selectedDate]);
 
   const calendarModifiers = useMemo(() => {
@@ -185,10 +195,11 @@ function Page() {
     const done: Date[] = [];
     for (const [key, arr] of tasksByDay.entries()) {
       const d = new Date(key);
+      const todayKey = fmtIST(new Date(), "yyyy-MM-dd");
       const hasDone = arr.some((t) => t.status === "completed");
-      const hasOverdue = arr.some((t) => t.status !== "completed" && isPast(new Date(t.due_date!)) && !isToday(new Date(t.due_date!)));
-      const hasToday = arr.some((t) => t.status !== "completed" && isToday(new Date(t.due_date!)));
-      const hasUpcoming = arr.some((t) => t.status !== "completed" && isFuture(new Date(t.due_date!)));
+      const hasOverdue = arr.some((t) => t.status !== "completed" && key < todayKey);
+      const hasToday = arr.some((t) => t.status !== "completed" && key === todayKey);
+      const hasUpcoming = arr.some((t) => t.status !== "completed" && key > todayKey);
       if (hasOverdue) overdue.push(d);
       else if (hasToday) today.push(d);
       else if (hasUpcoming) upcoming.push(d);
@@ -267,7 +278,7 @@ function Page() {
           </Card>
           <Card className="p-3 shadow-card">
             <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="font-display font-semibold">{format(selectedDate, "EEEE, MMM d")}</h3>
+              <h3 className="font-display font-semibold">{fmtIST(selectedDate, "EEEE, MMM d")}</h3>
               <Badge variant="secondary">{dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</Badge>
             </div>
             {dayTasks.length === 0 ? (
@@ -339,8 +350,10 @@ function TaskItem({
   onOpen: () => void;
 }) {
   const due = task.due_date ? new Date(task.due_date) : null;
-  const isOverdue = task.status !== "completed" && due && isPast(due) && !isToday(due);
-  const isDueToday = task.status !== "completed" && due && isToday(due);
+  const dueIST = due ? istWall(due) : null;
+  const nowI = nowIST();
+  const isDueToday = task.status !== "completed" && dueIST && isSameDay(dueIST, nowI);
+  const isOverdue = task.status !== "completed" && dueIST && dueIST.getTime() < nowI.getTime() && !isDueToday;
   const prio = PRIORITY_META[task.priority];
 
   function call(e: React.MouseEvent) {
@@ -396,7 +409,7 @@ function TaskItem({
             {due && (
               <span className="inline-flex items-center gap-1">
                 <CalendarClock className="size-3" />
-                {format(due, "MMM d, h:mm a")}
+                {fmtIST(due, "MMM d, h:mm a")} IST
               </span>
             )}
             {assignee && (
@@ -440,9 +453,8 @@ function TaskActionsDialog({
       setNote("");
       setPriority(task.priority);
       if (task.due_date) {
-        const d = new Date(task.due_date);
-        setReschedDate(format(d, "yyyy-MM-dd"));
-        setReschedTime(format(d, "HH:mm"));
+        setReschedDate(fmtIST(task.due_date, "yyyy-MM-dd"));
+        setReschedTime(fmtIST(task.due_date, "HH:mm"));
       } else {
         setReschedDate("");
         setReschedTime("");
@@ -469,7 +481,8 @@ function TaskActionsDialog({
   async function reschedule() {
     if (!task) return;
     if (!reschedDate) return toast.error("Pick a date");
-    const iso = new Date(`${reschedDate}T${reschedTime || "09:00"}`).toISOString();
+    // Interpret the picker values as IST wall-clock, then convert to UTC ISO.
+    const iso = fromZonedTime(`${reschedDate}T${reschedTime || "09:00"}:00`, IST_TZ).toISOString();
     setBusy(true);
     const { error } = await supabase
       .from("tasks")
