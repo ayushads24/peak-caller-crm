@@ -12,7 +12,12 @@ export const Route = createFileRoute("/api/public/webhook/facebook")({
         const token = url.searchParams.get("hub.verify_token");
         const challenge = url.searchParams.get("hub.challenge");
         const expected = process.env.FACEBOOK_VERIFY_TOKEN;
-        if (mode === "subscribe" && token && expected && token === expected) {
+        const tokenMatch =
+          !!token &&
+          !!expected &&
+          token.length === expected.length &&
+          timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+        if (mode === "subscribe" && tokenMatch) {
           return new Response(challenge ?? "", { status: 200 });
         }
         return new Response("Forbidden", { status: 403 });
