@@ -105,7 +105,7 @@ function Page() {
     if (!user || !allowed) return;
     void (async () => {
       setLoadingMembers(true);
-      let q = supabase.from("profiles").select("id, full_name, email").eq("is_active", true);
+      let q = (supabase as any).from("profiles_directory").select("id, full_name, email, team_id, is_active").eq("is_active", true);
       if (!isMgr) {
         // team leader: only members of teams they lead
         const { data: teams } = await supabase.from("teams").select("id").eq("leader_id", user.id);

@@ -140,7 +140,7 @@ function Page() {
         : Promise.resolve({ data: [] as LeadLite[] }),
       supabase.from("statuses").select("id, name, color"),
       userIds.length
-        ? supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+        ? (supabase as any).from("profiles_directory").select("id, full_name, email").in("id", userIds)
         : Promise.resolve({ data: [] as ProfileLite[] }),
     ]);
     setLeads(new Map(((lds ?? []) as LeadLite[]).map((l) => [l.id, l])));

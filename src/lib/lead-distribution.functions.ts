@@ -250,6 +250,7 @@ export const bulkReassign = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    await assertCanManage(context.userId, null);
     return applyAssignments(
       data.leadIds.map((id) => ({ lead_id: id, user_id: data.toUserId })),
       "manual",
@@ -267,6 +268,7 @@ export const bulkSplitEqual = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    await assertCanManage(context.userId, null);
     const assignments = distributeRoundRobin(data.leadIds, data.userIds);
     return applyAssignments(assignments, "round_robin", "Bulk split equal", context.userId);
   });
@@ -280,6 +282,7 @@ export const bulkSplitPercentage = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    await assertCanManage(context.userId, null);
     const assignments = distributePercentage(data.leadIds, data.distribution);
     return applyAssignments(assignments, "percentage", "Bulk split percentage", context.userId);
   });
@@ -292,7 +295,8 @@ export const setLeadPriority = createServerFn({ method: "POST" })
       priority: Priority,
     }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertCanManage(context.userId, null);
     const { error } = await supabaseAdmin.from("leads").update({ priority: data.priority }).in("id", data.leadIds);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -376,7 +380,25 @@ export const getDistributionDashboard = createServerFn({ method: "GET" })
 export const getLeadAssignmentHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ leadId: z.string().uuid() }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    // Authorize: admin/manager OR lead owner/assignee OR team-leader of assignee.
+    const { data: lead } = await supabaseAdmin
+      .from("leads")
+      .select("assigned_to, created_by")
+      .eq("id", data.leadId)
+      .maybeSingle();
+    if (!lead) throw new Error("Lead not found");
+    const scope = await getActorTeamScope(context.userId);
+    let allowed = scope.isAdmin
+      || lead.assigned_to === context.userId
+      || lead.created_by === context.userId;
+    if (!allowed && scope.teamIds.length > 0 && lead.assigned_to) {
+      const { data: prof } = await supabaseAdmin
+        .from("profiles").select("team_id").eq("id", lead.assigned_to).maybeSingle();
+      if (prof?.team_id && scope.teamIds.includes(prof.team_id)) allowed = true;
+    }
+    if (!allowed) throw new Error("Forbidden");
+
     const { data: rows, error } = await supabaseAdmin
       .from("lead_assignment_history")
       .select("id, from_user_id, to_user_id, assigned_by, method, reason, created_at")
