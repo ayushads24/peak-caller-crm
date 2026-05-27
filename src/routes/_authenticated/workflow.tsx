@@ -240,6 +240,16 @@ function Page() {
   const current = queue[0];
   const currentLead = current ? leadsMap.get(current.lead_id) : null;
   const currentStatus = currentLead && statuses.find((s) => s.id === currentLead.status_id);
+  const waitingRetries = useMemo(
+    () =>
+      items.filter(
+        (i) =>
+          (i.status === "pending" || i.status === "in_progress") &&
+          !!i.retry_at &&
+          new Date(i.retry_at) > now,
+      ),
+    [items, now],
+  );
   const stats = useMemo(
     () => ({
       total: items.length,
@@ -261,6 +271,10 @@ function Page() {
     if (lead) toast.info(`Retry due: ${lead.client_name}`, { icon: "🔔" });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queue[0]?.id]);
+
+  function retryMinutesLeft(retry_at: string) {
+    return Math.max(1, Math.round((new Date(retry_at).getTime() - now.getTime()) / 60_000));
+  }
 
   function leadTag(l: Lead | undefined): "new" | "task" | null {
     if (!l) return null;
@@ -579,6 +593,12 @@ function Page() {
                       })()}
                       {CAT_META[current.category].label}
                     </Badge>
+                    {current.retry_at && (
+                      <Badge className="border-0 gap-1 bg-blue-500 text-white">
+                        <RotateCw className="size-3" />
+                        Retry #{current.retry_count}
+                      </Badge>
+                    )}
                     {currentStatus && (
                       <Badge
                         style={{ background: currentStatus.color, color: "white" }}
@@ -707,8 +727,10 @@ function Page() {
               if (!l) return null;
               const meta = CAT_META[i.category];
               const tag = leadTag(l);
-              const tagClasses =
-                tag === "new"
+              const isRetry = !!i.retry_at;
+              const tagClasses = isRetry
+                ? "border-blue-400/60 bg-blue-500/10"
+                : tag === "new"
                   ? "border-orange-400/60 bg-orange-500/10"
                   : tag === "task"
                     ? "border-yellow-400/60 bg-yellow-500/10"
@@ -726,13 +748,19 @@ function Page() {
                   <div className="flex-1 min-w-0">
                     <div className="truncate font-medium flex items-center gap-1.5">
                       {l.client_name}
-                      {tag === "new" && (
+                      {isRetry && (
+                        <Badge className="border-0 bg-blue-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
+                          <RotateCw className="size-2.5" />
+                          Retry
+                        </Badge>
+                      )}
+                      {!isRetry && tag === "new" && (
                         <Badge className="border-0 bg-orange-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
                           <span className="size-1.5 rounded-full bg-white animate-pulse" />
                           NEW
                         </Badge>
                       )}
-                      {tag === "task" && (
+                      {!isRetry && tag === "task" && (
                         <Badge className="border-0 bg-yellow-500 text-white text-[9px] px-1.5 py-0 gap-1 h-4">
                           <AlarmClock className="size-2.5" />
                           Task Due
@@ -749,10 +777,37 @@ function Page() {
                 </button>
               );
             })}
-            {queue.length <= 1 && (
+            {queue.length <= 1 && waitingRetries.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-4">Queue empty.</p>
             )}
           </div>
+          {waitingRetries.length > 0 && (
+            <div className="mt-3 border-t pt-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Retrying later
+              </p>
+              <div className="space-y-1.5">
+                {waitingRetries.map((i) => {
+                  const l = leadsMap.get(i.lead_id);
+                  if (!l) return null;
+                  return (
+                    <div
+                      key={i.id}
+                      className="flex items-center gap-2 rounded-lg border border-dashed border-blue-300/50 bg-blue-500/5 p-2 text-xs text-muted-foreground"
+                    >
+                      <RotateCw className="size-3 shrink-0 text-blue-400" />
+                      <span className="flex-1 truncate font-medium text-foreground/70">
+                        {l.client_name}
+                      </span>
+                      <span className="shrink-0 text-blue-500">
+                        {retryMinutesLeft(i.retry_at!)}m
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
