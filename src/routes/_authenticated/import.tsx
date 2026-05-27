@@ -99,7 +99,7 @@ function autoGuess(header: string): FieldKey | typeof SKIP {
   if (/tasktitle|tasksubject|tasktopic/.test(h)) return "task_title";
   if (/taskdue|taskdate|taskdeadline/.test(h)) return "task_due_date";
   if (/taskdesc|taskdetail|tasknote/.test(h)) return "task_description";
-  if (/^assigneename$|^assignee$|assign|owner|salesperson|salesrep|rep$|assignedto/.test(h)) return "assigned_to";
+  if (/^assigneename$|^assignee$|assign|owner|salesperson|salesrep|rep$|assignedto|caller|agent|executive|telecaller|employee|staff|teamember|handledby|managedby/.test(h)) return "assigned_to";
   if (/^label|tag/.test(h)) return "label";
   if (/note|comment|remark|message/.test(h)) return "notes";
   if (/^createdon$|^createddate$|^created$|^leaddate$|^enquirydate$|^enquiry$/.test(h)) return "created_at";
@@ -586,6 +586,12 @@ function ImportPage() {
           Supports .csv, .xlsx, .xls. Duplicates detected by phone number. Dates accept Excel serials, ISO, dd/MM/yyyy, MM/dd/yyyy.
           Need a template? Click <span className="font-medium">Sample file</span> to download a ready-to-fill CSV with all supported columns.
         </p>
+        {profilesList.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            <span className="font-medium">Assigned To column mein yeh exact names likhein:</span>{" "}
+            {profilesList.map(p => p.full_name ?? p.email).filter(Boolean).join(" · ")}
+          </p>
+        )}
       </Card>
 
       {headers.length > 0 && (
@@ -652,6 +658,20 @@ function ImportPage() {
                             } else v = "";
                           }
                           else if (f.key === "follow_up") { const d = parseFlexibleDate(r.follow_up); v = d ? format(d, "dd MMM yyyy") : (r.follow_up ? String(r.follow_up) : ""); }
+                          else if (f.key === "assigned_to") {
+                            const raw = r.assigned_to ? String(r.assigned_to).trim() : "";
+                            if (!raw) return <td key={f.key} className="p-2 text-muted-foreground">—</td>;
+                            const normFn = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            const matched = profilesList.find(p =>
+                              (p.full_name && (p.full_name.trim().toLowerCase() === raw.toLowerCase() || normFn(p.full_name) === normFn(raw))) ||
+                              (p.email && (p.email.trim().toLowerCase() === raw.toLowerCase() || normFn(p.email) === normFn(raw)))
+                            );
+                            return <td key={f.key} className="p-2 max-w-[180px] truncate" title={raw}>
+                              {matched
+                                ? <span className="text-emerald-600 font-medium">{matched.full_name ?? matched.email}</span>
+                                : <span className="text-red-500">⚠ {raw}</span>}
+                            </td>;
+                          }
                           else v = r[f.key] == null ? "" : String(r[f.key]);
                           return <td key={f.key} className="p-2 max-w-[180px] truncate" title={v}>{v}</td>;
                         })}
