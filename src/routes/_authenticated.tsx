@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notification-bell";
 import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -81,6 +82,7 @@ function Layout() {
         </nav>
         <div className="border-t border-white/10 pt-3 mt-3">
           <div className="px-3 py-2 text-xs text-[var(--sidebar-muted)] truncate">{user.email}</div>
+          <NotificationBell sidebarStyle />
           <Button variant="ghost" size="sm" onClick={logout} className="w-full justify-start text-[var(--sidebar-muted)] hover:text-[var(--sidebar-fg)] hover:bg-[var(--sidebar-accent)]">
             <LogOut className="size-4 mr-2" /> Sign out
           </Button>
@@ -100,6 +102,10 @@ function Layout() {
             {item.label}
           </Link>
         ))}
+        <div className="flex flex-col items-center gap-0.5 px-2 py-1.5">
+          <NotificationBell />
+          <span className="text-[10px] font-medium text-muted-foreground">Alerts</span>
+        </div>
         <button onClick={logout} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground">
           <LogOut className="size-5" />
           Sign out
