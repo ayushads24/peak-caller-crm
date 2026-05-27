@@ -118,9 +118,11 @@ function parseFlexibleDate(v: unknown): Date | null {
     return isValid(d) ? d : null;
   }
   const s = String(v).trim();
-  // Try ISO first
-  const iso = new Date(s);
-  if (isValid(iso) && /\d{4}/.test(s)) return iso;
+  // Only use native Date parse for strict ISO format (yyyy-MM-dd or yyyy-MM-ddTHH:mm...)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const iso = new Date(s);
+    if (isValid(iso)) return iso;
+  }
   const formats = [
     "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy",
     "MM/dd/yyyy", "M/d/yyyy",
