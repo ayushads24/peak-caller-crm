@@ -33,8 +33,8 @@ function Page() {
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
   const [leads, setLeads] = useState<LeadLite[]>([]);
   const [connectedLeadIds, setConnectedLeadIds] = useState<Set<string>>(new Set());
-  const [meetingsDone, setMeetingsDone] = useState(0);
   const [meetingsScheduled, setMeetingsScheduled] = useState(0);
+  const [kpiSheet, setKpiSheet] = useState<{ open: boolean; label: string; leads: LeadLite[] }>({ open: false, label: "", leads: [] });
   const [callsToday, setCallsToday] = useState(0);
   const [pendingTasks, setPendingTasks] = useState<{ id: string; title: string; due_date: string | null; lead_id: string }[]>([]);
   const [punch, setPunch] = useState<{ id: string; punch_in_at: string; punch_out_at: string | null } | null>(null);
@@ -133,12 +133,6 @@ function Page() {
     setLeads(leadRows);
     setConnectedLeadIds(new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)));
     setCallsToday(callsTodayRes.count ?? 0);
-    // Meetings Done: leads currently in a "meeting done" type status (status-based, not activity-based)
-    const meetingDoneStatusIds = new Set(
-      statusRows.filter((st) => /meeting\s*done/i.test(st.name)).map((st) => st.id)
-    );
-    const mdCount = leadRows.filter((lRow) => lRow.status_id && meetingDoneStatusIds.has(lRow.status_id)).length;
-    setMeetingsDone(mdCount);
     setMeetingsScheduled(mSched.count ?? 0);
     setPendingTasks((t.data ?? []) as typeof pendingTasks);
     setLoading(false);
@@ -148,16 +142,22 @@ function Page() {
   const connectedCount = connectedLeadIds.size;
   const pct = (n: number) => totalLeads > 0 ? Math.round((n / totalLeads) * 100) : 0;
 
-  // Sales leads: is_sales flag OR status name matches sale/won/converted pattern
-  const salesLeads = leads.filter((l) => {
+  const meetingDoneLeads = useMemo(() => leads.filter((l) => {
+    const st = statuses.find((s) => s.id === l.status_id);
+    return st ? /meeting\s*done/i.test(st.name) : false;
+  }), [leads, statuses]);
+  const meetingsDone = meetingDoneLeads.length;
+
+  const salesLeads = useMemo(() => leads.filter((l) => {
     const st = statuses.find((s) => s.id === l.status_id);
     return st ? (st.is_sales || /sale|won|converted|closed/i.test(st.name)) : false;
-  });
-  // Lost leads: is_lost flag OR status name matches lost/rejected/dropped pattern
-  const lostLeads = leads.filter((l) => {
+  }), [leads, statuses]);
+
+  const lostLeads = useMemo(() => leads.filter((l) => {
     const st = statuses.find((s) => s.id === l.status_id);
     return st ? (st.is_lost || /lost|rejected|dropped|no.?response|not.?interested/i.test(st.name)) : false;
-  });
+  }), [leads, statuses]);
+
   const totalSalesValue = salesLeads.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0);
   const conversionsCount = salesLeads.length;
   const conversionRate = connectedCount > 0
@@ -268,10 +268,10 @@ function Page() {
       ]
     : isPM
     ? [
-        { label: "Total Assigned Leads", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
-        { label: "Meetings Done", value: meetingsDone, sub: `${pct(meetingsDone)}% of assigned`, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
-        { label: "Total Sale", value: conversionsCount, sub: `${pct(conversionsCount)}% of assigned`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
-        { label: "Lost", value: lostLeads.length, sub: `${pct(lostLeads.length)}% of assigned`, icon: XCircle, accent: "from-rose-500/20 to-rose-500/0" },
+        { label: "Total Assigned Leads", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0", onClick: () => setKpiSheet({ open: true, label: "Total Assigned Leads", leads }) },
+        { label: "Meetings Done", value: meetingsDone, sub: `${pct(meetingsDone)}% of assigned`, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0", onClick: () => setKpiSheet({ open: true, label: "Meetings Done", leads: meetingDoneLeads }) },
+        { label: "Total Sale", value: conversionsCount, sub: `${pct(conversionsCount)}% of assigned`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0", onClick: () => setKpiSheet({ open: true, label: "Total Sale", leads: salesLeads }) },
+        { label: "Lost", value: lostLeads.length, sub: `${pct(lostLeads.length)}% of assigned`, icon: XCircle, accent: "from-rose-500/20 to-rose-500/0", onClick: () => setKpiSheet({ open: true, label: "Lost", leads: lostLeads }) },
       ]
     : [
         { label: "Total Leads", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
@@ -323,20 +323,31 @@ function Page() {
       <div className={`grid gap-3 sm:gap-4 mt-6 ${isPM ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-5"}`}>
         {loading
           ? Array.from({ length: isPM ? 4 : 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
-          : kpis.map((k) => (
-          <Card key={k.label} className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card`}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground font-medium">{k.label}</div>
-                <div className="font-display text-xl sm:text-2xl font-bold mt-2 truncate">{k.value}</div>
-                {k.sub && <div className="text-xs text-muted-foreground mt-0.5">{k.sub}</div>}
+          : kpis.map((k) => {
+            const cardInner = (
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground font-medium">{k.label}</div>
+                  <div className="font-display text-xl sm:text-2xl font-bold mt-2 truncate">{k.value}</div>
+                  {k.sub && <div className="text-xs text-muted-foreground mt-0.5">{k.sub}</div>}
+                </div>
+                <div className="size-8 sm:size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <k.icon className="size-4" />
+                </div>
               </div>
-              <div className="size-8 sm:size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <k.icon className="size-4" />
-              </div>
-            </div>
-          </Card>
-        ))}
+            );
+            return k.onClick ? (
+              <button key={k.label} onClick={k.onClick} className="text-left">
+                <Card className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card hover:shadow-elegant transition-shadow cursor-pointer`}>
+                  {cardInner}
+                </Card>
+              </button>
+            ) : (
+              <Card key={k.label} className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card`}>
+                {cardInner}
+              </Card>
+            );
+          })}
       </div>
 
       {/* Activity grid */}
@@ -470,6 +481,29 @@ function Page() {
                 {t.due_date && <p className="text-[11px] text-muted-foreground">Due {format(new Date(t.due_date), "MMM d, h:mm a")}</p>}
               </button>
             ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* KPI leads sheet (PM) */}
+      <Sheet open={kpiSheet.open} onOpenChange={(v) => setKpiSheet((s) => ({ ...s, open: v }))}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader><SheetTitle className="font-display">{kpiSheet.label} ({kpiSheet.leads.length})</SheetTitle></SheetHeader>
+          <div className="mt-4 space-y-2">
+            {kpiSheet.leads.map((l) => {
+              const st = statuses.find((s) => s.id === l.status_id);
+              return (
+                <div key={l.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  <span className="size-2 rounded-full shrink-0" style={{ background: st?.color ?? "#888" }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{l.client_name}</p>
+                    {st && <p className="text-xs text-muted-foreground">{st.name}</p>}
+                  </div>
+                  {l.sales_value ? <span className="text-xs text-muted-foreground shrink-0">₹{Number(l.sales_value).toLocaleString("en-IN")}</span> : null}
+                </div>
+              );
+            })}
+            {kpiSheet.leads.length === 0 && <p className="text-sm text-muted-foreground">No clients in this category.</p>}
           </div>
         </SheetContent>
       </Sheet>
