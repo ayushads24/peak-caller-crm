@@ -37,7 +37,7 @@ import {
   ChevronLeft,
   MoreHorizontal,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { whatsappUrl } from "@/lib/utils";
@@ -424,6 +424,13 @@ export function LeadDetailSheet({
                 value={edit.phone ?? ""}
                 onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
                 onBlur={save}
+              />
+            </Field>
+            <Field label="Lead Created On">
+              <Input
+                value={lead?.created_at ? format(new Date(lead.created_at), "dd MMM yyyy") : "—"}
+                readOnly
+                className="bg-muted cursor-default"
               />
             </Field>
               </div>
