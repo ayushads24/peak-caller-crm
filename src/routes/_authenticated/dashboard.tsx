@@ -109,33 +109,27 @@ function Page() {
     setLoading(true);
     const todayStart = startOfDay(new Date()).toISOString();
     const todayEnd = endOfDay(new Date()).toISOString();
-    const [s, l, calls, callsTodayRes, mAct, mSched, t, _p] = await Promise.all([
+    const [s, l, calls, callsTodayRes, mSched, t, _p] = await Promise.all([
       supabase.from("statuses").select("id, name, color, is_sales, sort_order").order("sort_order"),
       supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
       supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
-      supabase.from("activities").select("lead_id, metadata").eq("type", "status_changed").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("meetings").select("id", { count: "exact", head: true }).gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
       supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50),
       loadPunch(),
     ]);
     const statusRows = (s.data ?? []) as StatusRow[];
+    const leadRows = (l.data ?? []) as LeadLite[];
     setStatuses(statusRows);
-    setLeads((l.data ?? []) as LeadLite[]);
+    setLeads(leadRows);
     setConnectedLeadIds(new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)));
     setCallsToday(callsTodayRes.count ?? 0);
-    // Historical Meeting Done: any lead whose status changed TO a "Meeting Done" status within the range
-    const meetingDoneNames = new Set(
-      statusRows
-        .filter((st) => /meeting\s*done/i.test(st.name))
-        .map((st) => st.name.toLowerCase())
+    // Meetings Done: leads currently in a "meeting done" type status (status-based, not activity-based)
+    const meetingDoneStatusIds = new Set(
+      statusRows.filter((st) => /meeting\s*done/i.test(st.name)).map((st) => st.id)
     );
-    const mdLeadIds = new Set<string>();
-    for (const a of (mAct.data ?? []) as { lead_id: string; metadata: { to?: string } | null }[]) {
-      const to = a.metadata?.to?.toLowerCase();
-      if (to && meetingDoneNames.has(to)) mdLeadIds.add(a.lead_id);
-    }
-    setMeetingsDone(mdLeadIds.size);
+    const mdCount = leadRows.filter((lRow) => lRow.status_id && meetingDoneStatusIds.has(lRow.status_id)).length;
+    setMeetingsDone(mdCount);
     setMeetingsScheduled(mSched.count ?? 0);
     setPendingTasks((t.data ?? []) as typeof pendingTasks);
     setLoading(false);
@@ -144,7 +138,12 @@ function Page() {
   const salesStatus = statuses.find((s) => s.is_sales);
   const totalLeads = leads.length;
   const connectedCount = connectedLeadIds.size;
-  const salesLeads = leads.filter((l) => salesStatus && l.status_id === salesStatus.id);
+  // Sales leads: either is_sales flag OR status name matches sale/won/converted pattern
+  const salesLeads = leads.filter((l) => {
+    if (salesStatus && l.status_id === salesStatus.id) return true;
+    const st = statuses.find((s) => s.id === l.status_id);
+    return st ? /sale|won|converted|closed/i.test(st.name) : false;
+  });
   const totalSalesValue = salesLeads.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0);
   const conversionsCount = salesLeads.length;
   const conversionRate = connectedCount > 0
