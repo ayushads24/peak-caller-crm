@@ -139,11 +139,38 @@ function Page() {
         { event: "*", schema: "public", table: "breaks", filter: `user_id=eq.${user.id}` },
         () => loadBreak(),
       )
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, (payload) => {
-        const row = payload.new as { id: string; client_name: string; created_at: string };
-        if (row?.created_at && new Date(row.created_at).getTime() >= flowStartedAt.current) {
-          toast.success(`New fresh lead: ${row.client_name}`, { icon: "✨" });
-        }
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, async (payload) => {
+        const row = payload.new as { id: string; client_name: string; created_at: string; status_id: string | null; assigned_to: string | null };
+        if (!user) { void load(); return; }
+
+        // Only auto-queue if lead is assigned to this user or unassigned
+        if (row.assigned_to && row.assigned_to !== user.id) { void load(); return; }
+
+        // Check if today's flow exists and has fresh category items
+        const workDate = format(new Date(), "yyyy-MM-dd");
+        const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
+        if (!flow) { void load(); return; }
+
+        const { data: flowItems } = await supabase.from("calling_flow_items").select("id, lead_id, category, priority, status").eq("flow_id", flow.id);
+        const hasFresh = (flowItems ?? []).some((i) => i.category === "fresh");
+        if (!hasFresh) { void load(); return; }
+
+        // Avoid duplicate if lead already in flow
+        if ((flowItems ?? []).some((i) => i.lead_id === row.id)) { void load(); return; }
+
+        // Insert at front of pending queue (right after current in_progress = second position)
+        const pendingPriorities = (flowItems ?? []).filter((i) => i.status === "pending").map((i) => i.priority as number);
+        const minPriority = pendingPriorities.length > 0 ? Math.min(...pendingPriorities) : 0;
+        await supabase.from("calling_flow_items").insert({
+          flow_id: flow.id,
+          lead_id: row.id,
+          category: "fresh" as const,
+          priority: minPriority - 1,
+          attempts_planned: 2,
+          attempts_done: 0,
+          status: "pending",
+        });
+        toast.success(`New lead added to queue: ${row.client_name}`, { icon: "🔥" });
         void load();
       })
       .subscribe();
