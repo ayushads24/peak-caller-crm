@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { CreateFlowModal, type FlowCategory } from "@/components/workflow/create-flow-modal";
 import { PostCallSheet } from "@/components/workflow/post-call-sheet";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   LeadDetailSheet,
   type LeadRow,
@@ -525,6 +526,7 @@ function Page() {
             <Plus className="size-4 mr-1" />
             New workflow
           </Button>
+          <NotificationBell />
           {autoMode === "off" ? (
             <Button
               onClick={toggleAuto}
