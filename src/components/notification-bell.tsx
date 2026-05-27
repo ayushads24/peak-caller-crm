@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Bell, UserPlus, Flame, CheckCheck } from "lucide-react";
+import { Bell, UserPlus, Flame, CheckCheck, Trash2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { format, isToday } from "date-fns";
 
 interface Notif {
   id: string;
-  type: "lead_assigned" | "fresh_queue" | "task_due";
+  type: "lead_assigned" | "lead_deleted" | "fresh_queue" | "task_due";
   title: string;
   body: string;
   at: string;
@@ -27,6 +27,7 @@ function persist(notifs: Notif[]) {
 
 function NotifIcon({ type }: { type: Notif["type"] }) {
   if (type === "fresh_queue") return <Flame className="size-3.5 text-orange-500" />;
+  if (type === "lead_deleted") return <Trash2 className="size-3.5 text-destructive" />;
   return <UserPlus className="size-3.5 text-primary" />;
 }
 
@@ -70,6 +71,12 @@ export function NotificationBell({ sidebarStyle }: { sidebarStyle?: boolean }) {
         const newRow = payload.new as { client_name: string; assigned_to: string | null };
         if (newRow.assigned_to === user.id && oldRow.assigned_to !== user.id) {
           push({ type: "lead_assigned", title: "Lead assigned to you", body: newRow.client_name });
+        }
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "leads" }, (payload) => {
+        const oldRow = payload.old as { client_name: string; assigned_to: string | null };
+        if (oldRow.assigned_to === user.id) {
+          push({ type: "lead_deleted", title: "Assigned lead deleted", body: oldRow.client_name });
         }
       })
       .subscribe();
