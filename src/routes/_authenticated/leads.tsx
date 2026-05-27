@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/components/leads/lead-detail-sheet";
 import { LeadsFilterBar, EMPTY_FILTERS, type LeadFilters, type ProfileLite } from "@/components/leads/leads-filter-bar";
 import type { MovementEvent } from "@/components/leads/leads-analytics-strip";
@@ -34,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/leads")({
 
 function Page() {
   const { user } = useAuth();
+  const canDelete = true;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
   const search = Route.useSearch();
@@ -304,21 +305,26 @@ function Page() {
   }
 
   async function deleteLead(id: string) {
+    if (!canDelete) return toast.error("You don't have permission to delete leads.");
     if (!confirm("Delete this lead permanently?")) return;
-    const { error } = await supabase.from("leads").delete().eq("id", id);
+    const { data, error } = await supabase.from("leads").delete().eq("id", id).select("id");
     if (error) return toast.error(error.message);
+    if (!data?.length) return toast.error("Could not delete lead. You may not have permission.");
     toast.success("Lead deleted");
     setSelected((s) => { const ns = new Set(s); ns.delete(id); return ns; });
     load();
   }
 
   async function bulkDelete() {
+    if (!canDelete) return toast.error("You don't have permission to delete leads.");
     const ids = Array.from(selected);
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} leads permanently?`)) return;
-    const { error } = await supabase.from("leads").delete().in("id", ids);
+    const { data, error } = await supabase.from("leads").delete().in("id", ids).select("id");
     if (error) return toast.error(error.message);
-    toast.success(`Deleted ${ids.length} leads`);
+    const deleted = data?.length ?? 0;
+    if (!deleted) return toast.error("Could not delete leads. You may not have permission.");
+    toast.success(`Deleted ${deleted} lead${deleted !== 1 ? "s" : ""}`);
     clearSelection();
     load();
   }
@@ -430,9 +436,9 @@ function Page() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" onClick={bulkDelete}>
+          {canDelete && <Button size="sm" variant="outline" className="gap-1 text-destructive hover:text-destructive" onClick={bulkDelete}>
             <Trash2 className="size-3.5" /> Delete selected
-          </Button>
+          </Button>}
 
           <Button size="sm" variant="ghost" className="ml-auto gap-1" onClick={clearSelection}>
             <X className="size-3.5" /> Clear
@@ -515,11 +521,9 @@ function Page() {
                       : <span className="text-muted-foreground">Unassigned</span>}
                   </td>
                   <td className="p-3 font-medium">{l.sales_value ? `₹${Number(l.sales_value).toLocaleString("en-IN")}` : "—"}</td>
-                  <td className="p-3 text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</td>
+                  <td className="p-3 text-xs text-muted-foreground">{format(new Date(l.created_at), "dd MMM yyyy")}</td>
                   <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
-                      <Trash2 className="size-4" />
-                    </Button>
+                    {canDelete && <Button size="icon" variant="ghost" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}><Trash2 className="size-4" /></Button>}
                   </td>
                 </tr>
               );
@@ -556,14 +560,12 @@ function Page() {
                 {s && <Badge className="border-0 shrink-0" style={{ background: s.color, color: "white" }}>{s.name}</Badge>}
               </div>
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(l.created_at), { addSuffix: true })}</span>
+                <span className="text-xs text-muted-foreground">{format(new Date(l.created_at), "dd MMM yyyy")}</span>
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {l.phone && <Button asChild size="icon" variant="outline" className="size-8 text-sky-600"><a href={`tel:${displayPhone(l.phone)}`}><Phone className="size-3.5" /></a></Button>}
                   {l.phone && whatsappUrl(l.phone, dtTemplate, (l as any).doubletick_contact_id) && <Button asChild size="icon" variant="outline" className="size-8 text-emerald-600"><a href={whatsappUrl(l.phone, dtTemplate, (l as any).doubletick_contact_id)} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5" /></a></Button>}
                   {l.email && <Button asChild size="icon" variant="outline" className="size-8"><a href={`mailto:${l.email}`}><Mail className="size-3.5" /></a></Button>}
-                  <Button size="icon" variant="outline" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}>
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {canDelete && <Button size="icon" variant="outline" className="size-8 text-destructive hover:text-destructive" onClick={() => deleteLead(l.id)}><Trash2 className="size-3.5" /></Button>}
                 </div>
               </div>
             </Card>

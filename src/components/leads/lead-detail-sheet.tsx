@@ -96,6 +96,7 @@ export function LeadDetailSheet({
   onPrev?: () => void;
 }) {
   const { user } = useAuth();
+  const canDelete = true;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
   const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
@@ -259,9 +260,11 @@ export function LeadDetailSheet({
   }
 
   async function deleteLead() {
+    if (!canDelete) return toast.error("You don't have permission to delete leads.");
     if (!confirm("Delete this lead permanently?")) return;
-    const { error } = await supabase.from("leads").delete().eq("id", lead!.id);
+    const { data, error } = await supabase.from("leads").delete().eq("id", lead!.id).select("id");
     if (error) return toast.error(error.message);
+    if (!data?.length) return toast.error("Could not delete lead. You may not have permission.");
     toast.success("Lead deleted");
     onOpenChange(false);
     onChanged();
@@ -387,13 +390,15 @@ export function LeadDetailSheet({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={deleteLead}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="size-4 mr-2" />
-                  Delete lead
-                </DropdownMenuItem>
+                {canDelete && (
+                  <DropdownMenuItem
+                    onClick={deleteLead}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="size-4 mr-2" />
+                    Delete lead
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

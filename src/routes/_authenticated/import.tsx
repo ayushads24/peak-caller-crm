@@ -187,7 +187,7 @@ function ImportPage() {
   const [labelsList, setLabelsList] = useState<{ id: string; name: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [history, setHistory] = useState<BatchLog[]>([]);
-  const canImport = isAdmin(roles) || hasPermission(permissions, "leads.import");
+  const canImport = true;
 
   useEffect(() => { void loadMeta(); }, []);
 
@@ -646,12 +646,12 @@ function ImportPage() {
                           let v: string = "";
                           if (f.key === "created_at") {
                             const raw = r.created_at ? String(r.created_at) : "";
-                            if (createdAt) v = format(createdAt, "yyyy-MM-dd HH:mm");
+                            if (createdAt) v = format(createdAt, "dd MMM yyyy");
                             else if (raw) {
                               return <td key={f.key} className="p-2 max-w-[180px] truncate text-red-600" title={`Parse fail: ${raw}`}>⚠ {raw}</td>;
                             } else v = "";
                           }
-                          else if (f.key === "follow_up") { const d = parseFlexibleDate(r.follow_up); v = d ? format(d, "yyyy-MM-dd") : (r.follow_up ? String(r.follow_up) : ""); }
+                          else if (f.key === "follow_up") { const d = parseFlexibleDate(r.follow_up); v = d ? format(d, "dd MMM yyyy") : (r.follow_up ? String(r.follow_up) : ""); }
                           else v = r[f.key] == null ? "" : String(r[f.key]);
                           return <td key={f.key} className="p-2 max-w-[180px] truncate" title={v}>{v}</td>;
                         })}
@@ -692,7 +692,7 @@ function ImportPage() {
               <tbody>
                 {history.map((b) => (
                   <tr key={b.id} className="border-t">
-                    <td className="p-2 text-muted-foreground">{format(new Date(b.created_at), "MMM d, HH:mm")}</td>
+                    <td className="p-2 text-muted-foreground">{format(new Date(b.created_at), "dd MMM yyyy, HH:mm")}</td>
                     <td className="p-2 truncate max-w-[240px]">{b.filename}</td>
                     <td className="p-2 text-right">{b.total_rows}</td>
                     <td className="p-2 text-right text-emerald-600 font-medium">{b.inserted_count}</td>
