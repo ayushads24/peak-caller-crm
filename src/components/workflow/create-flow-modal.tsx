@@ -15,12 +15,14 @@ import { toast } from "sonner";
 export type FlowCategory = "fresh" | "interested_meeting" | "quotation_sent" | "followup";
 
 type StatusRow = { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean };
+type LabelRow = { id: string; name: string; color: string };
 
 const FOLLOWUP_KEY = "__followup__";
 
 interface CategoryConfig {
   rowId: string;
   statusId: string; // status uuid, or FOLLOWUP_KEY for "any open status"
+  labelIds: string[]; // empty = no label filter
   enabled: boolean;
   fromDate: string;
   toDate: string;
@@ -50,6 +52,7 @@ function iconFor(cat: FlowCategory) {
 export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, targetUserName }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: (flowId: string) => void; targetUserId?: string; targetUserName?: string }) {
   const { user } = useAuth();
   const [statuses, setStatuses] = useState<StatusRow[]>([]);
+  const [labels, setLabels] = useState<LabelRow[]>([]);
   const [cats, setCats] = useState<CategoryConfig[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
@@ -61,14 +64,15 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
     let cancelled = false;
     (async () => {
       setLoadingStatuses(true);
-      const { data } = await supabase
-        .from("statuses")
-        .select("id, name, color, is_sales, is_lost")
-        .order("sort_order");
+      const [statusRes, labelRes] = await Promise.all([
+        supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
+        supabase.from("labels").select("id, name, color").order("name"),
+      ]);
       if (cancelled) return;
-      const rows = (data ?? []) as StatusRow[];
+      const rows = (statusRes.data ?? []) as StatusRow[];
       const open_ = rows.filter((s) => !s.is_sales && !s.is_lost);
       setStatuses(open_);
+      setLabels((labelRes.data ?? []) as LabelRow[]);
       setTerminalIds(new Set(rows.filter((s) => s.is_sales || s.is_lost).map((s) => s.id)));
 
       // Seed defaults from real statuses by name (best-effort) + follow-up bucket
@@ -78,12 +82,12 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
       const meeting = find("meeting");
       const quote = find("quotation") ?? find("quote");
       const fresh = find("fresh") ?? find("new");
-      if (meeting) seed.push({ rowId: newRowId(), statusId: meeting.id, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 3 });
-      if (quote) seed.push({ rowId: newRowId(), statusId: quote.id, enabled: true, fromDate: daysAgo(15), toDate: today(), attempts: 2 });
-      if (fresh) seed.push({ rowId: newRowId(), statusId: fresh.id, enabled: true, fromDate: today(), toDate: today(), attempts: 2 });
-      seed.push({ rowId: newRowId(), statusId: FOLLOWUP_KEY, enabled: false, fromDate: daysAgo(3), toDate: today(), attempts: 1 });
+      if (meeting) seed.push({ rowId: newRowId(), statusId: meeting.id, labelIds: [], enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 3 });
+      if (quote) seed.push({ rowId: newRowId(), statusId: quote.id, labelIds: [], enabled: true, fromDate: daysAgo(15), toDate: today(), attempts: 2 });
+      if (fresh) seed.push({ rowId: newRowId(), statusId: fresh.id, labelIds: [], enabled: true, fromDate: today(), toDate: today(), attempts: 2 });
+      seed.push({ rowId: newRowId(), statusId: FOLLOWUP_KEY, labelIds: [], enabled: false, fromDate: daysAgo(3), toDate: today(), attempts: 1 });
       setCats(seed.length ? seed : [
-        { rowId: newRowId(), statusId: open_[0]?.id ?? FOLLOWUP_KEY, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
+        { rowId: newRowId(), statusId: open_[0]?.id ?? FOLLOWUP_KEY, labelIds: [], enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
       ]);
       setLoadingStatuses(false);
     })();
@@ -96,14 +100,24 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
     const handles: number[] = [];
     const cancellers: (() => void)[] = [];
     for (const c of cats) {
-      const key = `${c.statusId}|${c.fromDate}|${c.toDate}`;
+      const key = `${c.statusId}|${c.fromDate}|${c.toDate}|${c.labelIds.join(",")}`;
       setCounts((prev) => ({ ...prev, [c.rowId]: "loading" }));
       const h = window.setTimeout(async () => {
         let cancelled = false;
         cancellers.push(() => { cancelled = true; });
         try {
+          // If label filter active, resolve matching lead IDs first
+          let labelLeadIds: string[] | null = null;
+          if (c.labelIds.length > 0) {
+            const { data: ll } = await supabase.from("lead_labels").select("lead_id").in("label_id", c.labelIds);
+            labelLeadIds = [...new Set((ll ?? []).map((r: { lead_id: string }) => r.lead_id))];
+            if (labelLeadIds.length === 0) {
+              if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: 0 }));
+              return;
+            }
+          }
+
           if (c.statusId === FOLLOWUP_KEY) {
-            // Need to exclude terminal statuses + count nulls — count via select head with filter list
             let q = supabase
               .from("leads")
               .select("id", { count: "exact", head: true })
@@ -114,6 +128,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
               const ids = Array.from(terminalIds);
               q = q.or(`status_id.is.null,status_id.not.in.(${ids.join(",")})`);
             }
+            if (labelLeadIds) q = q.in("id", labelLeadIds);
             const { count } = await q;
             if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
           } else {
@@ -124,6 +139,7 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
               .gte("created_at", new Date(c.fromDate).toISOString())
               .lte("created_at", new Date(c.toDate + "T23:59:59").toISOString());
             if (targetUserId) q = q.eq("assigned_to", targetUserId);
+            if (labelLeadIds) q = q.in("id", labelLeadIds);
             const { count } = await q;
             if (!cancelled) setCounts((prev) => ({ ...prev, [c.rowId]: count ?? 0 }));
           }
@@ -158,8 +174,16 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
     const pick = firstUnused?.id ?? statuses[0]?.id ?? FOLLOWUP_KEY;
     setCats((arr) => [
       ...arr,
-      { rowId: newRowId(), statusId: pick, enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
+      { rowId: newRowId(), statusId: pick, labelIds: [], enabled: true, fromDate: daysAgo(7), toDate: today(), attempts: 2 },
     ]);
+  }
+
+  function toggleLabel(idx: number, labelId: string) {
+    setCats((arr) => arr.map((c, i) => {
+      if (i !== idx) return c;
+      const has = c.labelIds.includes(labelId);
+      return { ...c, labelIds: has ? c.labelIds.filter((id) => id !== labelId) : [...c.labelIds, labelId] };
+    }));
   }
   function removeRow(idx: number) {
     setCats((arr) => arr.filter((_, i) => i !== idx));
@@ -191,6 +215,15 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
     let priority = 0;
     for (const cat of enabled) {
       const meta = rowMeta(cat);
+
+      // Resolve label filter
+      let labelLeadIds: Set<string> | null = null;
+      if (cat.labelIds.length > 0) {
+        const { data: ll } = await supabase.from("lead_labels").select("lead_id").in("label_id", cat.labelIds);
+        labelLeadIds = new Set((ll ?? []).map((r: { lead_id: string }) => r.lead_id));
+        if (labelLeadIds.size === 0) continue;
+      }
+
       let q = supabase.from("leads").select("id, status_id, created_at, updated_at")
         .gte("created_at", new Date(cat.fromDate).toISOString())
         .lte("created_at", new Date(cat.toDate + "T23:59:59").toISOString());
@@ -199,6 +232,9 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
       }
       if (targetUserId) {
         q = q.eq("assigned_to", targetUserId);
+      }
+      if (labelLeadIds) {
+        q = q.in("id", Array.from(labelLeadIds));
       }
       const { data: leads } = await q;
       const filtered = (leads ?? []).filter((l) => {
@@ -297,6 +333,25 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
                         <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => removeRow(i)} disabled={cats.length === 1}><X className="size-3.5" /></Button>
                       </div>
                     </div>
+                    {c.enabled && labels.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {labels.map((l) => {
+                          const selected = c.labelIds.includes(l.id);
+                          return (
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => toggleLabel(i, l.id)}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all ${selected ? "text-white border-transparent" : "bg-transparent border-border text-muted-foreground hover:border-primary/50"}`}
+                              style={selected ? { backgroundColor: l.color, borderColor: l.color } : {}}
+                            >
+                              <span className="size-1.5 rounded-full shrink-0" style={{ backgroundColor: selected ? "rgba(255,255,255,0.7)" : l.color }} />
+                              {l.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     {c.enabled && (
                       <div className="grid grid-cols-4 gap-2 mt-3">
                         <div>
