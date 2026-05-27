@@ -336,8 +336,9 @@ function Page() {
                 </div>
               </div>
             );
-            return k.onClick ? (
-              <button key={k.label} onClick={k.onClick} className="text-left">
+            const kOnClick = (k as { onClick?: () => void }).onClick;
+            return kOnClick ? (
+              <button key={k.label} onClick={kOnClick} className="text-left">
                 <Card className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card hover:shadow-elegant transition-shadow cursor-pointer`}>
                   {cardInner}
                 </Card>
