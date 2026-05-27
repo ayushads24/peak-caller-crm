@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Bell, UserPlus, Flame, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, UserPlus, Flame, CheckCheck, Trash2, ListTodo } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { format, isToday } from "date-fns";
 
 interface Notif {
   id: string;
-  type: "lead_assigned" | "lead_deleted" | "fresh_queue" | "task_due";
+  type: "lead_assigned" | "lead_deleted" | "fresh_queue" | "task_due" | "task_created";
   title: string;
   body: string;
   at: string;
@@ -28,6 +28,7 @@ function persist(notifs: Notif[]) {
 function NotifIcon({ type }: { type: Notif["type"] }) {
   if (type === "fresh_queue") return <Flame className="size-3.5 text-orange-500" />;
   if (type === "lead_deleted") return <Trash2 className="size-3.5 text-destructive" />;
+  if (type === "task_due" || type === "task_created") return <ListTodo className="size-3.5 text-amber-500" />;
   return <UserPlus className="size-3.5 text-primary" />;
 }
 
@@ -77,6 +78,15 @@ export function NotificationBell({ sidebarStyle }: { sidebarStyle?: boolean }) {
         const oldRow = payload.old as { client_name: string; assigned_to: string | null };
         if (oldRow.assigned_to === user.id) {
           push({ type: "lead_deleted", title: "Assigned lead deleted", body: oldRow.client_name });
+        }
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks" }, async (payload) => {
+        const task = payload.new as { title: string; lead_id: string; created_by: string; due_date: string | null };
+        if (task.created_by === user.id) return; // skip tasks you created yourself
+        const { data: lead } = await supabase.from("leads").select("assigned_to, client_name").eq("id", task.lead_id).maybeSingle();
+        if (lead?.assigned_to === user.id) {
+          const due = task.due_date ? ` — due ${format(new Date(task.due_date), "MMM d, h:mm a")}` : "";
+          push({ type: "task_created", title: `New task: ${task.title}`, body: `${lead.client_name}${due}` });
         }
       })
       .subscribe();
