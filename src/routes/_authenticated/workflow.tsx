@@ -53,6 +53,8 @@ interface Item {
   attempts_planned: number;
   attempts_done: number;
   status: "pending" | "in_progress" | "done" | "skipped" | "rescheduled";
+  retry_at: string | null;
+  retry_count: number;
 }
 interface Lead {
   id: string;
@@ -110,12 +112,20 @@ function Page() {
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [detailLead, setDetailLead] = useState<LeadRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const lastAutoCalledItemId = useRef<string | null>(null);
+  const lastRetryToastRef = useRef<string | null>(null);
   const flowStartedAt = useRef<number>(Date.now());
 
   useEffect(() => {
     if (user) void load();
   }, [user]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
 
   useEffect(() => {
     if (!user) return;
@@ -175,7 +185,7 @@ function Page() {
     const [{ data: its }, { data: sts }, { data: lbls }, { data: profs }, _b] = await Promise.all([
       supabase
         .from("calling_flow_items")
-        .select("id, lead_id, category, priority, attempts_planned, attempts_done, status")
+        .select("id, lead_id, category, priority, attempts_planned, attempts_done, status, retry_at, retry_count")
         .eq("flow_id", flow.id)
         .order("priority"),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
@@ -187,13 +197,13 @@ function Page() {
         .order("full_name"),
       loadBreak(),
     ]);
-    setItems((its ?? []) as Item[]);
+    setItems((its ?? []) as unknown as Item[]);
     setStatuses((sts ?? []) as Status[]);
     setFullStatuses((sts ?? []) as StatusRow[]);
     setLabels((lbls ?? []) as LabelRow[]);
     setProfiles((profs ?? []) as ProfileLite[]);
 
-    const ids = (its ?? []).map((i) => i.lead_id);
+    const ids = ((its ?? []) as unknown as Item[]).map((i) => i.lead_id);
     if (ids.length) {
       const { data: leads } = await supabase
         .from("leads")
@@ -219,10 +229,14 @@ function Page() {
     setLoading(false);
   }
 
-  const queue = useMemo(
-    () => items.filter((i) => i.status === "pending" || i.status === "in_progress"),
-    [items],
-  );
+  const queue = useMemo(() => {
+    const active = items.filter(
+      (i) =>
+        (i.status === "pending" || i.status === "in_progress") &&
+        (!i.retry_at || new Date(i.retry_at) <= now),
+    );
+    return [...active.filter((i) => !!i.retry_at), ...active.filter((i) => !i.retry_at)];
+  }, [items, now]);
   const current = queue[0];
   const currentLead = current ? leadsMap.get(current.lead_id) : null;
   const currentStatus = currentLead && statuses.find((s) => s.id === currentLead.status_id);
@@ -235,6 +249,18 @@ function Page() {
     }),
     [items, queue.length],
   );
+
+  // Toast when a retry item bubbles to front of queue
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const first = queue[0];
+    if (!first?.retry_at) return;
+    if (lastRetryToastRef.current === first.id) return;
+    lastRetryToastRef.current = first.id;
+    const lead = leadsMap.get(first.lead_id);
+    if (lead) toast.info(`Retry due: ${lead.client_name}`, { icon: "🔔" });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue[0]?.id]);
 
   function leadTag(l: Lead | undefined): "new" | "task" | null {
     if (!l) return null;
@@ -290,18 +316,32 @@ function Page() {
     setTimeout(() => setPostOpen(true), 300);
   }
 
-  async function advance() {
+  async function advance(notConnected = false) {
     if (!current) return;
+    const isFollowup = current.category === "followup" || dueTaskLeadIds.has(current.lead_id);
+    if (notConnected && isFollowup) {
+      const retryCount = current.retry_count ?? 0;
+      const delayMs = retryCount === 0 ? 30 * 60 * 1000 : 60 * 60 * 1000;
+      const retryAt = new Date(Date.now() + delayMs).toISOString();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabase.from("calling_flow_items").update({
+        attempts_done: current.attempts_done + 1,
+        status: "pending",
+        retry_at: retryAt,
+        retry_count: retryCount + 1,
+      } as any).eq("id", current.id);
+      toast.info(`Will retry in ${retryCount === 0 ? 30 : 60} minutes`, { icon: "⏰" });
+      return;
+    }
     const nextAttempts = current.attempts_done + 1;
     const done = nextAttempts >= current.attempts_planned;
-    await supabase
-      .from("calling_flow_items")
-      .update({
-        attempts_done: nextAttempts,
-        status: done ? "done" : "pending",
-        completed_at: done ? new Date().toISOString() : null,
-      })
-      .eq("id", current.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from("calling_flow_items").update({
+      attempts_done: nextAttempts,
+      status: done ? "done" : "pending",
+      completed_at: done ? new Date().toISOString() : null,
+      retry_at: null,
+    } as any).eq("id", current.id);
   }
 
   async function markAction(action: "done" | "skipped" | "complete_today") {
@@ -602,7 +642,7 @@ function Page() {
                     WhatsApp
                   </Button>
                 )}
-                <Button variant="outline" size="lg" onClick={advance}>
+                <Button variant="outline" size="lg" onClick={() => void advance()}>
                   <SkipForward className="size-4 mr-2" />
                   Next
                 </Button>
@@ -723,9 +763,9 @@ function Page() {
         lead={postLead}
         statuses={statuses}
         durationStartedAt={callStartedAt}
-        onComplete={() => {
+        onComplete={(cs) => {
           setCallStartedAt(null);
-          void advance();
+          void advance(cs === "not_connected");
         }}
       />
       <LeadDetailSheet

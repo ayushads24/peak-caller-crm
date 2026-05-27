@@ -20,7 +20,7 @@ export function PostCallSheet({
   onOpenChange: (v: boolean) => void;
   lead: { id: string; client_name: string; phone: string | null; status_id: string | null } | null;
   statuses: Status[];
-  onComplete: () => void;
+  onComplete: (callStatus: CallStatus) => void;
   durationStartedAt: number | null;
 }) {
   const { user } = useAuth();
@@ -88,7 +88,7 @@ export function PostCallSheet({
       });
     }
     setBusy(false);
-    if (advance) onComplete();
+    if (advance) onComplete(callStatus);
     onOpenChange(false);
   }
 
@@ -99,7 +99,7 @@ export function PostCallSheet({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) commit(false); else onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) void commit(false); else onOpenChange(v); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display flex items-center justify-between gap-2">
