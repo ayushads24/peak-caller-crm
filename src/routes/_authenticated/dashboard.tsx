@@ -58,8 +58,8 @@ function Page() {
   const smFromIso = useMemo(() => startOfDay(new Date(smFrom)).toISOString(), [smFrom]);
   const smToIso = useMemo(() => endOfDay(new Date(smTo)).toISOString(), [smTo]);
 
-  useEffect(() => { if (user) void load(); }, [user, fromIso, toIso]);
-  useEffect(() => { if (user) void loadStatusMovement(); }, [user, smFromIso, smToIso, smAssigned]);
+  useEffect(() => { if (user) void load(); }, [user, fromIso, toIso, isPM]);
+  useEffect(() => { if (user) void loadStatusMovement(); }, [user, smFromIso, smToIso, smAssigned, isPM]);
 
   useEffect(() => {
     if (!user) return;
@@ -89,10 +89,14 @@ function Page() {
     setSmLoading(true);
     let q = supabase
       .from("leads")
-      .select("id, client_name, status_id, sales_value, created_at")
-      .gte("created_at", smFromIso)
-      .lte("created_at", smToIso);
-    if (smAssigned !== "all") q = q.eq("assigned_to", smAssigned);
+      .select("id, client_name, status_id, sales_value, created_at");
+    if (isPM) {
+      // PM sees their assigned leads (no date filter needed)
+      q = q.eq("assigned_to", user.id);
+    } else {
+      q = q.gte("created_at", smFromIso).lte("created_at", smToIso);
+      if (smAssigned !== "all") q = q.eq("assigned_to", smAssigned);
+    }
     const { data } = await q;
     setSmLeads((data ?? []) as LeadLite[]);
     setSmLoading(false);
@@ -110,9 +114,13 @@ function Page() {
     setLoading(true);
     const todayStart = startOfDay(new Date()).toISOString();
     const todayEnd = endOfDay(new Date()).toISOString();
+    // PM gets ALL their assigned leads (no created_at filter — leads were created by callers)
+    const leadsQuery = isPM
+      ? supabase.from("leads").select("id, client_name, status_id, sales_value, created_at, assigned_to").eq("assigned_to", user.id)
+      : supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso);
     const [s, l, calls, callsTodayRes, mSched, t, _p] = await Promise.all([
       supabase.from("statuses").select("id, name, color, is_sales, is_lost, sort_order").order("sort_order"),
-      supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
+      leadsQuery,
       supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
       supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
       supabase.from("meetings").select("id", { count: "exact", head: true }).gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
@@ -286,24 +294,29 @@ function Page() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{format(new Date(from), "MMM d, yyyy")} → {format(new Date(to), "MMM d, yyyy")}</p>
+          {isPM
+            ? <p className="text-muted-foreground mt-1 text-sm">All your assigned leads</p>
+            : <p className="text-muted-foreground mt-1 text-sm">{format(new Date(from), "MMM d, yyyy")} → {format(new Date(to), "MMM d, yyyy")}</p>
+          }
         </div>
-        <Card className="p-3 flex flex-wrap items-end gap-2 shadow-card">
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-[140px]" />
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-[140px]" />
-          </div>
-          <div className="flex gap-1">
-            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("today")}>Today</Button>
-            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("week")}>7d</Button>
-            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("month")}>Month</Button>
-            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("all")}>All</Button>
-          </div>
-        </Card>
+        {!isPM && (
+          <Card className="p-3 flex flex-wrap items-end gap-2 shadow-card">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-[140px]" />
+            </div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("today")}>Today</Button>
+              <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("week")}>7d</Button>
+              <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("month")}>Month</Button>
+              <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => setRange("all")}>All</Button>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* KPI cards */}
@@ -385,8 +398,8 @@ function Page() {
             <span className="text-xs text-muted-foreground hidden sm:inline">Click a status to open filtered leads</span>
           </div>
 
-          {/* Filter bar */}
-          <div className="flex flex-wrap items-end gap-2 mb-4 p-3 rounded-lg bg-muted/40 border">
+          {/* Filter bar — hidden for PM since they always see all assigned leads */}
+          {!isPM && <div className="flex flex-wrap items-end gap-2 mb-4 p-3 rounded-lg bg-muted/40 border">
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
               <Input type="date" value={smFrom} onChange={(e) => setSmFrom(e.target.value)} className="h-8 w-[140px]" />
@@ -421,7 +434,7 @@ function Page() {
                 </Select>
               </div>
             )}
-          </div>
+          </div>}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {smLoading && (smLeads === null) && Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
