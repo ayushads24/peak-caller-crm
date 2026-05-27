@@ -114,12 +114,14 @@ function Page() {
   const [detailLead, setDetailLead] = useState<LeadRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [todayCalls, setTodayCalls] = useState(0);
+  const [todayConnected, setTodayConnected] = useState(0);
   const lastAutoCalledItemId = useRef<string | null>(null);
   const lastRetryToastRef = useRef<string | null>(null);
   const flowStartedAt = useRef<number>(Date.now());
 
   useEffect(() => {
-    if (user) void load();
+    if (user) { void load(); void loadTodayStats(); }
   }, [user]);
 
   useEffect(() => {
@@ -132,9 +134,8 @@ function Page() {
     if (!user) return;
     const ch = supabase
       .channel("workflow-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "calling_flow_items" }, () =>
-        load(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "calling_flow_items" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calls", filter: `user_id=eq.${user.id}` }, () => void loadTodayStats())
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "breaks", filter: `user_id=eq.${user.id}` },
@@ -179,6 +180,18 @@ function Page() {
       void supabase.removeChannel(ch);
     };
   }, [user]);
+
+  async function loadTodayStats() {
+    if (!user) return;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    const [total, connected] = await Promise.all([
+      supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart.toISOString()).lte("called_at", todayEnd.toISOString()),
+      supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "connected").gte("called_at", todayStart.toISOString()).lte("called_at", todayEnd.toISOString()),
+    ]);
+    setTodayCalls(total.count ?? 0);
+    setTodayConnected(connected.count ?? 0);
+  }
 
   async function loadBreak() {
     if (!user) return;
@@ -489,9 +502,12 @@ function Page() {
     );
   }
 
+  const connectRate = todayCalls > 0 ? Math.round((todayConnected / todayCalls) * 100) : 0;
+  const motivationalMsg = todayCalls === 0 ? "Let's go! 💪" : todayCalls < 10 ? "Warming up 🔥" : todayCalls < 20 ? "Great pace! 🚀" : todayCalls < 35 ? "On fire! 🔥🔥" : "Beast mode! 🏆";
+
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Workflow</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -571,6 +587,46 @@ function Page() {
               </Button>
             </>
           )}
+        </div>
+      </div>
+
+      {/* Caller stats bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <div className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
+          <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Phone className="size-4" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Calls today</div>
+            <div className="font-display text-xl font-bold">{todayCalls}</div>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
+          <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="size-4" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Connected</div>
+            <div className="font-display text-xl font-bold">{todayConnected}</div>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
+          <div className="size-8 rounded-lg bg-sky-500/10 text-sky-600 flex items-center justify-center shrink-0">
+            <SkipForward className="size-4" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Connect %</div>
+            <div className="font-display text-xl font-bold">{connectRate}%</div>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-gradient-to-br from-primary/10 to-primary/0 bg-card px-4 py-3 flex items-center gap-3">
+          <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 text-base">
+            {todayCalls < 10 ? "💪" : todayCalls < 20 ? "🔥" : todayCalls < 35 ? "🚀" : "🏆"}
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Vibe</div>
+            <div className="font-display text-sm font-bold">{motivationalMsg}</div>
+          </div>
         </div>
       </div>
 
