@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog, MessageCircle } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog, MessageCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import { format } from "date-fns";
@@ -631,20 +631,31 @@ function CreateLeadDialog({ open, onOpenChange, statuses, onCreated }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh?.id]);
   const [saving, setSaving] = useState(false);
+  const [dupWarning, setDupWarning] = useState<{ phone?: string; email?: string } | null>(null);
+
+  // Real-time duplicate check while typing phone
+  useEffect(() => {
+    const phone = form.phone.trim();
+    if (!phone) { setDupWarning(null); return; }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from("leads").select("client_name").eq("phone", phone).limit(1).maybeSingle();
+      setDupWarning(data ? { phone: data.client_name } : null);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [form.phone]);
 
   async function submit() {
     if (!user || !form.client_name.trim()) return;
     setSaving(true);
-    // duplicate check
     if (form.email || form.phone) {
-      let q = supabase.from("leads").select("id").limit(1);
+      let q = supabase.from("leads").select("id, client_name").limit(1);
       if (form.email && form.phone) q = q.or(`email.eq.${form.email},phone.eq.${form.phone}`);
       else if (form.email) q = q.eq("email", form.email);
       else if (form.phone) q = q.eq("phone", form.phone);
       const { data } = await q;
       if (data && data.length > 0) {
         setSaving(false);
-        toast.error("A lead with this email or phone already exists");
+        toast.error(`Duplicate: "${(data[0] as { client_name: string }).client_name}" already has this phone/email`);
         return;
       }
     }
@@ -673,7 +684,16 @@ function CreateLeadDialog({ open, onOpenChange, statuses, onCreated }: {
         <div className="space-y-3">
           <div className="space-y-1.5"><Label>Client name *</Label><Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={dupWarning?.phone ? "border-amber-500 focus-visible:ring-amber-500" : ""} />
+              {dupWarning?.phone && (
+                <p className="flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+                  <AlertTriangle className="size-3 shrink-0" />
+                  Already exists: {dupWarning.phone}
+                </p>
+              )}
+            </div>
             <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-2">
