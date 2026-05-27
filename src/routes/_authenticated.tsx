@@ -102,10 +102,6 @@ function Layout() {
             {item.label}
           </Link>
         ))}
-        <div className="flex flex-col items-center gap-0.5 px-2 py-1.5">
-          <NotificationBell />
-          <span className="text-[10px] font-medium text-muted-foreground">Alerts</span>
-        </div>
         <button onClick={logout} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground">
           <LogOut className="size-5" />
           Sign out

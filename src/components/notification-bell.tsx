@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Bell, UserPlus, Flame, CheckCheck, Trash2, ListTodo } from "lucide-react";
@@ -34,6 +34,7 @@ function NotifIcon({ type }: { type: Notif["type"] }) {
 
 export function NotificationBell({ sidebarStyle }: { sidebarStyle?: boolean }) {
   const { user } = useAuth();
+  const instanceId = useId();
   const [notifs, setNotifs] = useState<Notif[]>(loadStored);
   const [open, setOpen] = useState(false);
   const unread = notifs.filter((n) => !n.read).length;
@@ -60,7 +61,7 @@ export function NotificationBell({ sidebarStyle }: { sidebarStyle?: boolean }) {
   useEffect(() => {
     if (!user) return;
     const ch = supabase
-      .channel("notif-bell")
+      .channel(`notif-bell-${instanceId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, (payload) => {
         const row = payload.new as { client_name: string; assigned_to: string | null };
         if (row.assigned_to === user.id) {
