@@ -11,19 +11,20 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateFlowModal } from "@/components/workflow/create-flow-modal";
-import { Users, PhoneCall, TrendingUp, CalendarCheck, CalendarPlus, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone, Percent, Filter } from "lucide-react";
+import { Users, PhoneCall, TrendingUp, CalendarCheck, CalendarPlus, IndianRupee, LogIn, ListTodo, ChevronRight, Loader2, Phone, Percent, Filter, XCircle } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, startOfYear, subMonths } from "date-fns";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({ component: Page });
 
-interface StatusRow { id: string; name: string; color: string; is_sales: boolean; sort_order: number; }
+interface StatusRow { id: string; name: string; color: string; is_sales: boolean; is_lost: boolean; sort_order: number; }
 interface LeadLite { id: string; client_name: string; status_id: string | null; sales_value: number | null; created_at: string; }
 interface ProfileLite { id: string; full_name: string | null; email: string | null; }
 
 function Page() {
   const { user, roles } = useAuth();
   const isManager = isAdminOrManager(roles);
+  const isPM = roles.includes("project_manager");
   const navigate = useNavigate();
   const today = new Date();
   const [from, setFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
@@ -110,7 +111,7 @@ function Page() {
     const todayStart = startOfDay(new Date()).toISOString();
     const todayEnd = endOfDay(new Date()).toISOString();
     const [s, l, calls, callsTodayRes, mSched, t, _p] = await Promise.all([
-      supabase.from("statuses").select("id, name, color, is_sales, sort_order").order("sort_order"),
+      supabase.from("statuses").select("id, name, color, is_sales, is_lost, sort_order").order("sort_order"),
       supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso),
       supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
       supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
@@ -135,14 +136,19 @@ function Page() {
     setLoading(false);
   }
 
-  const salesStatus = statuses.find((s) => s.is_sales);
   const totalLeads = leads.length;
   const connectedCount = connectedLeadIds.size;
-  // Sales leads: either is_sales flag OR status name matches sale/won/converted pattern
+  const pct = (n: number) => totalLeads > 0 ? Math.round((n / totalLeads) * 100) : 0;
+
+  // Sales leads: is_sales flag OR status name matches sale/won/converted pattern
   const salesLeads = leads.filter((l) => {
-    if (salesStatus && l.status_id === salesStatus.id) return true;
     const st = statuses.find((s) => s.id === l.status_id);
-    return st ? /sale|won|converted|closed/i.test(st.name) : false;
+    return st ? (st.is_sales || /sale|won|converted|closed/i.test(st.name)) : false;
+  });
+  // Lost leads: is_lost flag OR status name matches lost/rejected/dropped pattern
+  const lostLeads = leads.filter((l) => {
+    const st = statuses.find((s) => s.id === l.status_id);
+    return st ? (st.is_lost || /lost|rejected|dropped|no.?response|not.?interested/i.test(st.name)) : false;
   });
   const totalSalesValue = salesLeads.reduce((sum, l) => sum + Number(l.sales_value ?? 0), 0);
   const conversionsCount = salesLeads.length;
@@ -244,20 +250,27 @@ function Page() {
 
   const kpis = isManager
     ? [
-        { label: "Total Assigned Clients", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
-        { label: "Meetings Scheduled", value: meetingsScheduled, icon: CalendarPlus, accent: "from-fuchsia-500/20 to-fuchsia-500/0" },
-        { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
-        { label: "Conversions", value: conversionsCount, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
-        { label: "Meeting → Sales Rate", value: `${meetingConversionRate}%`, icon: Percent, accent: "from-sky-500/20 to-sky-500/0" },
-        { label: "Assigned → Sales Rate", value: `${assignedConversionRate}%`, icon: Percent, accent: "from-teal-500/20 to-teal-500/0" },
-        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
+        { label: "Total Assigned Clients", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Meetings Scheduled", value: meetingsScheduled, sub: undefined, icon: CalendarPlus, accent: "from-fuchsia-500/20 to-fuchsia-500/0" },
+        { label: "Meetings Done", value: meetingsDone, sub: undefined, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+        { label: "Conversions", value: conversionsCount, sub: undefined, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+        { label: "Meeting → Sales Rate", value: `${meetingConversionRate}%`, sub: undefined, icon: Percent, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Assigned → Sales Rate", value: `${assignedConversionRate}%`, sub: undefined, icon: Percent, accent: "from-teal-500/20 to-teal-500/0" },
+        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, sub: undefined, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
+      ]
+    : isPM
+    ? [
+        { label: "Total Assigned Leads", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Meetings Done", value: meetingsDone, sub: `${pct(meetingsDone)}% of assigned`, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+        { label: "Total Sale", value: conversionsCount, sub: `${pct(conversionsCount)}% of assigned`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+        { label: "Lost", value: lostLeads.length, sub: `${pct(lostLeads.length)}% of assigned`, icon: XCircle, accent: "from-rose-500/20 to-rose-500/0" },
       ]
     : [
-        { label: "Total Leads", value: totalLeads, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
-        { label: "Connected Leads", value: connectedCount, icon: PhoneCall, accent: "from-sky-500/20 to-sky-500/0" },
-        { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
-        { label: "Meetings Done", value: meetingsDone, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
-        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
+        { label: "Total Leads", value: totalLeads, sub: undefined, icon: Users, accent: "from-indigo-500/20 to-indigo-500/0" },
+        { label: "Connected Leads", value: connectedCount, sub: undefined, icon: PhoneCall, accent: "from-sky-500/20 to-sky-500/0" },
+        { label: "Conversion Rate", value: `${conversionRate}%`, sub: undefined, icon: TrendingUp, accent: "from-emerald-500/20 to-emerald-500/0" },
+        { label: "Meetings Done", value: meetingsDone, sub: undefined, icon: CalendarCheck, accent: "from-violet-500/20 to-violet-500/0" },
+        { label: "Sales Value", value: `₹${totalSalesValue.toLocaleString("en-IN")}`, sub: undefined, icon: IndianRupee, accent: "from-amber-500/20 to-amber-500/0" },
       ];
 
   function setRange(preset: "today" | "week" | "month" | "all") {
@@ -294,13 +307,16 @@ function Page() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-6">
-        {loading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) : kpis.map((k) => (
+      <div className={`grid gap-3 sm:gap-4 mt-6 ${isPM ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-5"}`}>
+        {loading
+          ? Array.from({ length: isPM ? 4 : 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+          : kpis.map((k) => (
           <Card key={k.label} className={`relative overflow-hidden p-4 sm:p-5 shadow-card border-0 bg-gradient-to-br ${k.accent} bg-card`}>
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground font-medium">{k.label}</div>
                 <div className="font-display text-xl sm:text-2xl font-bold mt-2 truncate">{k.value}</div>
+                {k.sub && <div className="text-xs text-muted-foreground mt-0.5">{k.sub}</div>}
               </div>
               <div className="size-8 sm:size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <k.icon className="size-4" />
