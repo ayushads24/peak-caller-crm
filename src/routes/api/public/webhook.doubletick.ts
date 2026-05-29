@@ -25,7 +25,7 @@ function extractPhone(val: unknown, depth = 0): string {
   }
   if (val && typeof val === "object") {
     // Prioritise keys that sound like phone
-    const phoneKeys = ["phone", "mobile", "wa_id", "waId", "from", "sender",
+    const phoneKeys = ["customerPhone", "phone", "mobile", "wa_id", "waId", "from", "sender",
       "phoneNumber", "phone_number", "whatsapp", "number", "contact_number", "msisdn"];
     const obj = val as Record<string, unknown>;
     for (const k of phoneKeys) {
@@ -55,7 +55,7 @@ function extractName(val: unknown, depth = 0): string {
     return "";
   }
   if (val && typeof val === "object") {
-    const nameKeys = ["name", "full_name", "display_name", "username",
+    const nameKeys = ["customerName", "name", "full_name", "display_name", "username",
       "senderName", "contact_name", "profile_name", "pushname", "notify"];
     const obj = val as Record<string, unknown>;
     for (const k of nameKeys) {
