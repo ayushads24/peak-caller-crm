@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, ListTodo, CalendarPlus, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Status { id: string; name: string; color: string; }
@@ -29,11 +29,12 @@ export function PostCallSheet({
   const { user } = useAuth();
   const [callStatus, setCallStatus] = useState<CallStatus>("connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
-  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
+  const [selectedLabels, setSelectedLabels] = useState<LabelRow[]>([]);
+  const [labelSearch, setLabelSearch] = useState("");
+  const [labelPopoverOpen, setLabelPopoverOpen] = useState(false);
   const [note, setNote] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
-  const [meetingAt, setMeetingAt] = useState("");
   const [seconds, setSeconds] = useState(45);
   const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,8 +44,9 @@ export function PostCallSheet({
     if (!open || !lead) return;
     setCallStatus("connected");
     setLeadStatusId(lead.status_id);
-    setSelectedLabels(new Set());
-    setNote(""); setTaskTitle(""); setTaskDue(""); setMeetingAt("");
+    setSelectedLabels([]);
+    setLabelSearch("");
+    setNote(""); setTaskTitle(""); setTaskDue("");
     setSeconds(45); setExpired(false);
   }, [open, lead]);
 
@@ -61,12 +63,19 @@ export function PostCallSheet({
 
   if (!lead) return null;
 
-  function toggleLabel(id: string) {
-    setSelectedLabels((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const availableLabels = labels.filter(
+    (l) =>
+      !selectedLabels.find((s) => s.id === l.id) &&
+      l.name.toLowerCase().includes(labelSearch.toLowerCase())
+  );
+
+  function addLabel(l: LabelRow) {
+    setSelectedLabels((prev) => [...prev, l]);
+    setLabelSearch("");
+  }
+
+  function removeLabel(id: string) {
+    setSelectedLabels((prev) => prev.filter((l) => l.id !== id));
   }
 
   async function commit(advance: boolean) {
@@ -93,14 +102,8 @@ export function PostCallSheet({
       });
     }
 
-    if (meetingAt) {
-      await supabase.from("meetings").insert({
-        lead_id: lead.id, scheduled_at: new Date(meetingAt).toISOString(), created_by: user.id, title: "Meeting",
-      });
-    }
-
-    if (selectedLabels.size > 0) {
-      const rows = Array.from(selectedLabels).map((label_id) => ({ lead_id: lead.id, label_id }));
+    if (selectedLabels.length > 0) {
+      const rows = selectedLabels.map((l) => ({ lead_id: lead.id, label_id: l.id }));
       await supabase.from("lead_labels").upsert(rows, { onConflict: "lead_id,label_id", ignoreDuplicates: true });
     }
 
@@ -124,6 +127,7 @@ export function PostCallSheet({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) void commit(false); else onOpenChange(v); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
+
         {/* Header */}
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="font-display flex items-center justify-between gap-2">
@@ -134,16 +138,14 @@ export function PostCallSheet({
 
         <div className="px-5 py-4 space-y-4">
 
-          {/* Call Outcome + Lead Status — side by side */}
+          {/* Call Outcome + Lead Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground flex items-center gap-1">
                 <PhoneCall className="size-3" /> Call outcome
               </Label>
               <Select value={callStatus} onValueChange={(v) => setCallStatus(v as CallStatus)}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="connected">
                     <span className="flex items-center gap-2"><PhoneCall className="size-3 text-emerald-600" />Connected</span>
@@ -161,9 +163,7 @@ export function PostCallSheet({
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Lead status</Label>
               <Select value={leadStatusId ?? ""} onValueChange={setLeadStatusId}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="No change" />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="No change" /></SelectTrigger>
                 <SelectContent>
                   {statuses.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
@@ -184,26 +184,63 @@ export function PostCallSheet({
               <Label className="text-xs text-muted-foreground flex items-center gap-1">
                 <Tag className="size-3" /> Labels
               </Label>
-              <div className="flex flex-wrap gap-1.5">
-                {labels.map((l) => {
-                  const selected = selectedLabels.has(l.id);
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => toggleLabel(l.id)}
-                      className={cn(
-                        "px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all",
-                        selected
-                          ? "text-white border-transparent"
-                          : "bg-transparent border-border text-muted-foreground hover:border-foreground/40"
-                      )}
-                      style={selected ? { backgroundColor: l.color, borderColor: l.color } : {}}
-                    >
-                      {l.name}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* Selected labels */}
+                {selectedLabels.map((l) => (
+                  <span
+                    key={l.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                    style={{ backgroundColor: l.color }}
+                  >
+                    {l.name}
+                    <button type="button" onClick={() => removeLabel(l.id)} className="opacity-70 hover:opacity-100">
+                      <X className="size-3" />
                     </button>
-                  );
-                })}
+                  </span>
+                ))}
+
+                {/* Add label button */}
+                <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                    >
+                      <Plus className="size-3" /> Add label
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-52 p-2" align="start">
+                    <div className="flex items-center gap-1.5 border rounded-md px-2 py-1 mb-2">
+                      <Search className="size-3 text-muted-foreground shrink-0" />
+                      <input
+                        autoFocus
+                        value={labelSearch}
+                        onChange={(e) => setLabelSearch(e.target.value)}
+                        placeholder="Search labels..."
+                        className="text-xs w-full bg-transparent outline-none placeholder:text-muted-foreground"
+                      />
+                    </div>
+                    <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                      {availableLabels.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          {labelSearch ? "No match" : "All labels added"}
+                        </p>
+                      ) : (
+                        availableLabels.map((l) => (
+                          <button
+                            key={l.id}
+                            type="button"
+                            onClick={() => { addLabel(l); setLabelPopoverOpen(false); }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted text-sm text-left"
+                          >
+                            <span className="size-2.5 rounded-full shrink-0" style={{ background: l.color }} />
+                            {l.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           )}
@@ -222,41 +259,27 @@ export function PostCallSheet({
             />
           </div>
 
-          {/* Divider */}
           <div className="border-t" />
 
           {/* Task */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground flex items-center gap-1">
-              <ListTodo className="size-3" /> Task <span className="text-muted-foreground/60">(optional)</span>
+              <ListTodo className="size-3" /> Task <span className="text-muted-foreground/50">(optional)</span>
             </Label>
-            <div className="flex gap-2">
-              <Input
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="Task title"
-                className="text-sm h-9 flex-1"
-              />
+            <Input
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="Task title"
+              className="text-sm h-9"
+            />
+            {taskTitle && (
               <Input
                 type="datetime-local"
                 value={taskDue}
                 onChange={(e) => setTaskDue(e.target.value)}
-                className="text-sm h-9 w-40 shrink-0"
+                className="text-sm h-9"
               />
-            </div>
-          </div>
-
-          {/* Meeting */}
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground flex items-center gap-1">
-              <CalendarPlus className="size-3" /> Schedule meeting <span className="text-muted-foreground/60">(optional)</span>
-            </Label>
-            <Input
-              type="datetime-local"
-              value={meetingAt}
-              onChange={(e) => setMeetingAt(e.target.value)}
-              className="text-sm h-9"
-            />
+            )}
           </div>
         </div>
 
@@ -267,9 +290,9 @@ export function PostCallSheet({
             size="sm"
             onClick={whatsapp}
             disabled={!lead.phone}
-            className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+            className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 shrink-0"
           >
-            <MessageCircle className="size-4" /> WhatsApp
+            <MessageCircle className="size-4" />
           </Button>
 
           {!expired ? (
@@ -287,6 +310,7 @@ export function PostCallSheet({
             </>
           )}
         </div>
+
       </DialogContent>
     </Dialog>
   );
