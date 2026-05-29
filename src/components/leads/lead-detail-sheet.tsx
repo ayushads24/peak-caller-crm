@@ -500,100 +500,104 @@ export function LeadDetailSheet({
               </div>
             </Section>
 
-            <Section title="Pipeline">
-              <div className="space-y-3">
-            <Field label="Status">
-              <Select
-                value={edit.status_id ?? ""}
-                onValueChange={(v) => setEdit({ ...edit, status_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      <span className="inline-flex items-center gap-2">
-                        <span className="size-2 rounded-full" style={{ background: s.color }} />
-                        {s.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Assigned to">
-              <Select
-                value={edit.assigned_to ?? "__unassigned"}
-                onValueChange={(v) =>
-                  setEdit({ ...edit, assigned_to: v === "__unassigned" ? null : v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned">Unassigned</SelectItem>
-                  {profiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.full_name || p.email || p.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {dtTemplate.includes("{dtContactId}") && (
-              <Field label="DoubleTick Contact ID">
-                <Input
-                  value={edit.doubletick_contact_id ?? ""}
-                  readOnly
-                  placeholder="—"
-                  className="font-mono text-xs bg-muted cursor-default"
-                />
+            {/* Pipeline — desktop only (mobile uses Info tab) */}
+            <div className="hidden lg:block">
+              <Section title="Pipeline">
+                <div className="space-y-3">
+              <Field label="Status">
+                <Select
+                  value={edit.status_id ?? ""}
+                  onValueChange={(v) => setEdit({ ...edit, status_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="size-2 rounded-full" style={{ background: s.color }} />
+                          {s.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
-            )}
-            <Field label="Labels">
-              <div className="flex flex-wrap gap-1.5 items-center">
-                {assignedLabels.map((l) => (
-                  <Badge
-                    key={l.id}
-                    style={{ background: l.color, color: "white" }}
-                    className="border-0 gap-1 pr-1"
-                  >
-                    {l.name}
-                    <button
-                      onClick={() => removeLabel(l.id)}
-                      className="hover:bg-black/20 rounded-sm p-0.5"
+              <Field label="Assigned to">
+                <Select
+                  value={edit.assigned_to ?? "__unassigned"}
+                  onValueChange={(v) =>
+                    setEdit({ ...edit, assigned_to: v === "__unassigned" ? null : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unassigned">Unassigned</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name || p.email || p.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {dtTemplate.includes("{dtContactId}") && (
+                <Field label="DoubleTick Contact ID">
+                  <Input
+                    value={edit.doubletick_contact_id ?? ""}
+                    readOnly
+                    placeholder="—"
+                    className="font-mono text-xs bg-muted cursor-default"
+                  />
+                </Field>
+              )}
+              <Field label="Labels">
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {assignedLabels.map((l) => (
+                    <Badge
+                      key={l.id}
+                      style={{ background: l.color, color: "white" }}
+                      className="border-0 gap-1 pr-1"
                     >
-                      <X className="size-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {assignedLabels.length === 0 && (
-                  <span className="text-xs text-muted-foreground">No labels</span>
-                )}
-                {availableLabels.length > 0 && (
-                  <Select value="" onValueChange={addLabel}>
-                    <SelectTrigger className="h-7 w-auto gap-1 border-dashed px-2 text-xs">
-                      <Tag className="size-3" />
-                      Add
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableLabels.map((l) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          <span className="inline-flex items-center gap-2">
-                            <span className="size-2 rounded-full" style={{ background: l.color }} />
-                            {l.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </Field>
-              </div>
-            </Section>
+                      {l.name}
+                      <button
+                        onClick={() => removeLabel(l.id)}
+                        className="hover:bg-black/20 rounded-sm p-0.5"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  {assignedLabels.length === 0 && (
+                    <span className="text-xs text-muted-foreground">No labels</span>
+                  )}
+                  {availableLabels.length > 0 && (
+                    <Select value="" onValueChange={addLabel}>
+                      <SelectTrigger className="h-7 w-auto gap-1 border-dashed px-2 text-xs">
+                        <Tag className="size-3" />
+                        Add
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableLabels.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="size-2 rounded-full" style={{ background: l.color }} />
+                              {l.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </Field>
+                </div>
+              </Section>
+            </div>
+
           </div>
 
           {/* RIGHT: activity rail */}
@@ -618,17 +622,45 @@ export function LeadDetailSheet({
             </TabsList>
 
             <TabsContent value="info" className="mt-4 space-y-2">
-              {[
-                { label: "Sales Value", value: edit.sales_value != null ? `₹${edit.sales_value.toLocaleString("en-IN")}` : "—" },
-                { label: "Source", value: edit.lead_source || "—" },
-                { label: "Assigned To", value: assignedProfile?.full_name || assignedProfile?.email || "Unassigned" },
-                { label: "Customer ID", value: edit.doubletick_contact_id || "—" },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
-                  <span className="text-muted-foreground text-xs">{label}</span>
-                  <span className="font-medium font-mono text-xs">{value}</span>
+              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground text-xs">Sales Value</span>
+                <span className="font-medium text-xs">{edit.sales_value != null ? `₹${edit.sales_value.toLocaleString("en-IN")}` : "—"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground text-xs">Source</span>
+                <span className="font-medium text-xs">{edit.lead_source || "—"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground text-xs">Status</span>
+                <span className="font-medium text-xs flex items-center gap-1.5">
+                  {status && <span className="size-2 rounded-full shrink-0" style={{ background: status.color }} />}
+                  {status?.name || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground text-xs">Assigned To</span>
+                <span className="font-medium text-xs">{assignedProfile?.full_name || assignedProfile?.email || "Unassigned"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground text-xs">Customer ID</span>
+                <span className="font-medium font-mono text-xs truncate max-w-[180px]">{edit.doubletick_contact_id || "—"}</span>
+              </div>
+              {labels.length > 0 && (
+                <div className="rounded-lg border bg-card px-3 py-2.5">
+                  <p className="text-muted-foreground text-xs mb-2">Labels</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {assignedLabels.length === 0 && <span className="text-xs text-muted-foreground">No labels</span>}
+                    {assignedLabels.map((l) => (
+                      <Badge key={l.id} style={{ background: l.color, color: "white" }} className="border-0 gap-1 pr-1">
+                        {l.name}
+                        <button onClick={() => removeLabel(l.id)} className="hover:bg-black/20 rounded-sm p-0.5">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </TabsContent>
 
             <TabsContent value="notes" className="space-y-3 mt-4">
