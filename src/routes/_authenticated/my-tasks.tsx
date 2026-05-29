@@ -68,6 +68,7 @@ interface LeadLite {
   client_name: string;
   phone: string | null;
   status_id: string | null;
+  doubletick_contact_id?: string | null;
 }
 interface StatusLite { id: string; name: string; color: string }
 interface ProfileLite { id: string; full_name: string | null; email: string | null }
@@ -137,7 +138,7 @@ function Page() {
 
     const [{ data: lds }, { data: sts }, { data: profs }] = await Promise.all([
       leadIds.length
-        ? supabase.from("leads").select("id, client_name, phone, status_id").in("id", leadIds)
+        ? supabase.from("leads").select("id, client_name, phone, status_id, doubletick_contact_id").in("id", leadIds)
         : Promise.resolve({ data: [] as LeadLite[] }),
       supabase.from("statuses").select("id, name, color"),
       userIds.length
@@ -366,7 +367,7 @@ function TaskItem({
   function whatsapp(e: React.MouseEvent) {
     e.stopPropagation();
     if (!lead?.phone) return toast.error("No phone number on lead");
-    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "", lead.doubletick_contact_id);
     if (url) window.open(url, "_blank");
   }
 
@@ -526,7 +527,7 @@ function TaskActionsDialog({
   }
   function whatsapp() {
     if (!lead?.phone) return toast.error("No phone number");
-    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "", lead.doubletick_contact_id);
     if (url) window.open(url, "_blank");
   }
 

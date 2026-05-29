@@ -70,6 +70,7 @@ interface Lead {
   created_at: string;
   assigned_to?: string | null;
   created_by?: string | null;
+  doubletick_contact_id?: string | null;
 }
 interface Status {
   id: string;
@@ -252,7 +253,7 @@ function Page() {
       const { data: leads } = await supabase
         .from("leads")
         .select(
-          "id, client_name, phone, email, status_id, sales_value, lead_source, created_at, assigned_to, created_by",
+          "id, client_name, phone, email, status_id, sales_value, lead_source, created_at, assigned_to, created_by, doubletick_contact_id",
         )
         .in("id", ids);
       setLeadsMap(new Map((leads ?? []).map((l) => [l.id, l as Lead])));
@@ -758,7 +759,7 @@ function Page() {
                     variant="outline"
                     size="lg"
                     onClick={() => {
-                      const url = whatsappUrl(currentLead.phone, appSettings.doubletick_chat_url ?? "");
+                      const url = whatsappUrl(currentLead.phone, appSettings.doubletick_chat_url ?? "", currentLead.doubletick_contact_id);
                       if (url) window.open(url, "_blank");
                     }}
                   >

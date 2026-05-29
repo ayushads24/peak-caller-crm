@@ -26,7 +26,7 @@ export function PostCallSheet({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  lead: { id: string; client_name: string; phone: string | null; status_id: string | null; assigned_to?: string | null } | null;
+  lead: { id: string; client_name: string; phone: string | null; status_id: string | null; assigned_to?: string | null; doubletick_contact_id?: string | null } | null;
   statuses: Status[];
   labels?: LabelRow[];
   profiles?: ProfileLite[];
@@ -132,7 +132,7 @@ export function PostCallSheet({
 
   function whatsapp() {
     if (!lead?.phone) return;
-    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "", lead.doubletick_contact_id);
     if (url) window.open(url, "_blank");
   }
 

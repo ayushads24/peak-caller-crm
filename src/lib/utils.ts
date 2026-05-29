@@ -32,11 +32,15 @@ export function whatsappUrl(
   const tpl = dtTemplate.trim();
   // If contact ID known, try to build exact DoubleTick URL from template
   // Template expected: https://web.doubletick.io/conversations/919193868840/{dtContactId}
-  if (doubletickContactId && tpl.includes("{dtContactId}")) {
-    return tpl
-      .replace("{dtContactId}", doubletickContactId)
-      .replace("{phone91}", `91${digits}`)
-      .replace("{phone}", digits);
+  if (tpl.includes("{dtContactId}")) {
+    // Template requires contact ID — only use if we have it, else fall back to wa.me
+    if (doubletickContactId) {
+      return tpl
+        .replace("{dtContactId}", doubletickContactId)
+        .replace("{phone91}", `91${digits}`)
+        .replace("{phone}", digits);
+    }
+    return `https://wa.me/91${digits}`;
   }
 
   if (tpl) {
