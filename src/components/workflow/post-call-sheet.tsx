@@ -29,7 +29,7 @@ export function PostCallSheet({
   statuses: Status[];
   labels?: LabelRow[];
   profiles?: ProfileLite[];
-  onComplete: (callStatus: CallStatus) => void;
+  onComplete: (callStatus: CallStatus, newLeadStatusId?: string | null) => void;
   durationStartedAt: number | null;
 }) {
   const { user } = useAuth();
@@ -124,7 +124,7 @@ export function PostCallSheet({
     }
 
     setBusy(false);
-    if (advance) onComplete(callStatus);
+    if (advance) onComplete(callStatus, leadStatusId);
     onOpenChange(false);
   }
 

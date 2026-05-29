@@ -371,8 +371,24 @@ function Page() {
     setTimeout(() => setPostOpen(true), 300);
   }
 
-  async function advance(notConnected = false) {
+  async function advance(notConnected = false, newLeadStatusId?: string | null) {
     if (!current) return;
+
+    // If new status is a sales status → auto-complete queue item immediately
+    if (newLeadStatusId) {
+      const newStatus = statuses.find((s) => s.id === newLeadStatusId);
+      if (newStatus?.is_sales) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await supabase.from("calling_flow_items").update({
+          attempts_done: current.attempts_planned,
+          status: "done",
+          completed_at: new Date().toISOString(),
+          retry_at: null,
+        } as any).eq("id", current.id);
+        return;
+      }
+    }
+
     const isFollowup = current.category === "followup" || dueTaskLeadIds.has(current.lead_id);
     if (notConnected && isFollowup) {
       const retryCount = current.retry_count ?? 0;
@@ -905,9 +921,9 @@ function Page() {
         labels={labels}
         profiles={profiles}
         durationStartedAt={callStartedAt}
-        onComplete={(cs) => {
+        onComplete={(cs, newStatusId) => {
           setCallStartedAt(null);
-          void advance(cs === "not_connected");
+          void advance(cs === "not_connected", newStatusId);
         }}
       />
       <LeadDetailSheet
