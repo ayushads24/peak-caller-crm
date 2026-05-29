@@ -310,18 +310,6 @@ export function LeadDetailSheet({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-display text-xl truncate">{edit.client_name}</span>
-                  {status && (
-                    <Badge
-                      style={{
-                        background: `${status.color}1a`,
-                        color: status.color,
-                        borderColor: `${status.color}33`,
-                      }}
-                      className="border font-medium"
-                    >
-                      {status.name}
-                    </Badge>
-                  )}
                 </div>
                 <p className="text-xs text-muted-foreground truncate mt-0.5">
                   Created {formatDistanceToNow(new Date(edit.created_at), { addSuffix: true })}
@@ -359,7 +347,7 @@ export function LeadDetailSheet({
 
           {/* Quick actions row */}
           <div className="flex items-center gap-2">
-            <div className="grid grid-cols-3 gap-1.5 flex-1">
+            <div className="grid grid-cols-2 gap-1.5 flex-1">
               <QuickAction
                 href={edit.phone ? `tel:${edit.phone}` : undefined}
                 icon={<Phone className="size-3.5" />}
@@ -372,12 +360,6 @@ export function LeadDetailSheet({
                 icon={<MessageCircle className="size-3.5" />}
                 label="WhatsApp"
                 tone="text-emerald-600"
-              />
-              <QuickAction
-                href={edit.email ? `mailto:${edit.email}` : undefined}
-                icon={<Mail className="size-3.5" />}
-                label="Email"
-                tone="text-indigo-600"
               />
             </div>
             {saving && (
@@ -403,6 +385,50 @@ export function LeadDetailSheet({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+
+          {/* Status + Label quick row */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Select value={edit.status_id ?? ""} onValueChange={(v) => setEdit({ ...edit, status_id: v })}>
+              <SelectTrigger className="h-9 text-sm">
+                {status ? (
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 rounded-full shrink-0" style={{ background: status.color }} />
+                    {status.name}
+                  </span>
+                ) : <SelectValue placeholder="No status" />}
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="size-2 rounded-full" style={{ background: s.color }} />
+                      {s.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value="" onValueChange={addLabel}>
+              <SelectTrigger className="h-9 text-sm">
+                <span className="flex items-center gap-1.5">
+                  <Tag className="size-3.5" />
+                  {assignedLabels.length > 0 ? `${assignedLabels.length} label${assignedLabels.length > 1 ? "s" : ""}` : "Label"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {availableLabels.length > 0 ? availableLabels.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    <span className="flex items-center gap-2">
+                      <span className="size-2 rounded-full" style={{ background: l.color }} />
+                      {l.name}
+                    </span>
+                  </SelectItem>
+                )) : (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">All labels added</div>
+                )}
+              </SelectContent>
+            </Select>
           </div>
         </SheetHeader>
 
@@ -520,10 +546,9 @@ export function LeadDetailSheet({
               <Field label="DoubleTick Contact ID">
                 <Input
                   value={edit.doubletick_contact_id ?? ""}
-                  onChange={(e) => setEdit({ ...edit, doubletick_contact_id: e.target.value || null })}
-                  onBlur={save}
-                  placeholder="customer_xxxxxxxx"
-                  className="font-mono text-xs"
+                  readOnly
+                  placeholder="—"
+                  className="font-mono text-xs bg-muted cursor-default"
                 />
               </Field>
             )}
@@ -574,20 +599,57 @@ export function LeadDetailSheet({
           {/* RIGHT: activity rail */}
           <div className="overflow-y-auto px-5 py-5 bg-muted/30">
           <Tabs defaultValue="notes">
-            <TabsList className="grid grid-cols-3 w-full sticky top-0 z-10">
-              <TabsTrigger value="notes">
-                <MessageSquare className="size-3.5 mr-1" />
+            <TabsList className="grid grid-cols-4 w-full sticky top-0 z-10">
+              <TabsTrigger value="info" className="text-xs">
+                Info
+              </TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs">
+                <MessageSquare className="size-3 mr-1" />
                 Notes {notes.length}
               </TabsTrigger>
-              <TabsTrigger value="tasks">
-                <ListTodo className="size-3.5 mr-1" />
+              <TabsTrigger value="tasks" className="text-xs">
+                <ListTodo className="size-3 mr-1" />
                 Tasks {tasks.length}
               </TabsTrigger>
-              <TabsTrigger value="activity">
-                <ActivityIcon className="size-3.5 mr-1" />
-                Activity
+              <TabsTrigger value="activity" className="text-xs">
+                <ActivityIcon className="size-3 mr-1" />
+                Log
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="info" className="mt-4 space-y-3">
+              <div className="space-y-2">
+                {[
+                  { label: "Sales Value", value: edit.sales_value != null ? `₹${edit.sales_value.toLocaleString("en-IN")}` : "—" },
+                  { label: "Source", value: edit.lead_source || "—" },
+                  { label: "Status", value: status?.name || "—", color: status?.color },
+                  { label: "Assigned To", value: assignedProfile?.full_name || assignedProfile?.email || "Unassigned" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                    <span className="text-muted-foreground text-xs">{label}</span>
+                    <span className="font-medium flex items-center gap-1.5">
+                      {color && <span className="size-2 rounded-full shrink-0" style={{ background: color }} />}
+                      {value}
+                    </span>
+                  </div>
+                ))}
+                {assignedLabels.length > 0 && (
+                  <div className="rounded-lg border bg-card px-3 py-2.5">
+                    <p className="text-muted-foreground text-xs mb-2">Labels</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {assignedLabels.map((l) => (
+                        <Badge key={l.id} style={{ background: l.color, color: "white" }} className="border-0 gap-1 pr-1">
+                          {l.name}
+                          <button onClick={() => removeLabel(l.id)} className="hover:bg-black/20 rounded-sm p-0.5">
+                            <X className="size-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
             <TabsContent value="notes" className="space-y-3 mt-4">
               <div className="flex gap-2">
