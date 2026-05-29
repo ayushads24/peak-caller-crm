@@ -902,6 +902,7 @@ function Page() {
         onOpenChange={setPostOpen}
         lead={postLead}
         statuses={statuses}
+        labels={labels}
         durationStartedAt={callStartedAt}
         onComplete={(cs) => {
           setCallStartedAt(null);

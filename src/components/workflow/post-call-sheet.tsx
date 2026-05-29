@@ -7,25 +7,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, ListTodo, CalendarPlus, PhoneOff, PhoneCall, Loader2 } from "lucide-react";
+import { MessageSquare, ListTodo, CalendarPlus, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface Status { id: string; name: string; color: string; }
+interface LabelRow { id: string; name: string; color: string; }
 type CallStatus = "connected" | "not_connected" | "voicemail" | "busy" | "wrong_number";
 
 export function PostCallSheet({
-  open, onOpenChange, lead, statuses, onComplete, durationStartedAt,
+  open, onOpenChange, lead, statuses, labels = [], onComplete, durationStartedAt,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   lead: { id: string; client_name: string; phone: string | null; status_id: string | null } | null;
   statuses: Status[];
+  labels?: LabelRow[];
   onComplete: (callStatus: CallStatus) => void;
   durationStartedAt: number | null;
 }) {
   const { user } = useAuth();
   const [callStatus, setCallStatus] = useState<CallStatus>("connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
+  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
@@ -39,6 +43,7 @@ export function PostCallSheet({
     if (!open || !lead) return;
     setCallStatus("connected");
     setLeadStatusId(lead.status_id);
+    setSelectedLabels(new Set());
     setNote(""); setTaskTitle(""); setTaskDue(""); setMeetingAt("");
     setSeconds(45); setExpired(false);
   }, [open, lead]);
@@ -56,37 +61,49 @@ export function PostCallSheet({
 
   if (!lead) return null;
 
+  function toggleLabel(id: string) {
+    setSelectedLabels((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
   async function commit(advance: boolean) {
     if (!user || !lead) return;
     setBusy(true);
     const duration = durationStartedAt ? Math.round((Date.now() - durationStartedAt) / 1000) : 0;
 
-    // 1. Log call
     await supabase.from("calls").insert({
       lead_id: lead.id, user_id: user.id, status: callStatus, duration_seconds: duration, notes: note || null,
     });
 
-    // 2. Status change
     if (leadStatusId && leadStatusId !== lead.status_id) {
       await supabase.from("leads").update({ status_id: leadStatusId }).eq("id", lead.id);
     }
-    // 3. Note
+
     if (note.trim()) {
       await supabase.from("notes").insert({ lead_id: lead.id, content: note, created_by: user.id });
     }
-    // 4. Task
+
     if (taskTitle.trim()) {
       await supabase.from("tasks").insert({
         lead_id: lead.id, title: taskTitle, created_by: user.id, status: "pending",
         due_date: taskDue ? new Date(taskDue).toISOString() : null,
       });
     }
-    // 5. Meeting
+
     if (meetingAt) {
       await supabase.from("meetings").insert({
         lead_id: lead.id, scheduled_at: new Date(meetingAt).toISOString(), created_by: user.id, title: "Meeting",
       });
     }
+
+    if (selectedLabels.size > 0) {
+      const rows = Array.from(selectedLabels).map((label_id) => ({ lead_id: lead.id, label_id }));
+      await supabase.from("lead_labels").upsert(rows, { onConflict: "lead_id,label_id", ignoreDuplicates: true });
+    }
+
     setBusy(false);
     if (advance) onComplete(callStatus);
     onOpenChange(false);
@@ -98,71 +115,175 @@ export function PostCallSheet({
     window.open(`https://wa.me/${phone}`, "_blank");
   }
 
+  const timerColor = expired
+    ? "bg-destructive/10 text-destructive"
+    : seconds <= 10
+    ? "bg-amber-500/15 text-amber-600"
+    : "bg-primary/10 text-primary";
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) void commit(false); else onOpenChange(v); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
+        {/* Header */}
+        <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="font-display flex items-center justify-between gap-2">
-            <span>Post-call: {lead.client_name}</span>
-            <span className={`font-mono text-base px-2.5 py-0.5 rounded-md ${expired ? "bg-destructive/10 text-destructive" : seconds <= 10 ? "bg-amber-500/15 text-amber-600" : "bg-primary/10 text-primary"}`}>{seconds}s</span>
+            <span className="truncate text-base">{lead.client_name}</span>
+            <span className={cn("font-mono text-sm px-2.5 py-0.5 rounded-md shrink-0", timerColor)}>{seconds}s</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 mt-2">
-          <div>
-            <Label className="text-xs text-muted-foreground">Call outcome</Label>
-            <Select value={callStatus} onValueChange={(v) => setCallStatus(v as CallStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="connected"><span className="inline-flex items-center gap-2"><PhoneCall className="size-3 text-emerald-600" />Connected</span></SelectItem>
-                <SelectItem value="not_connected"><span className="inline-flex items-center gap-2"><PhoneOff className="size-3 text-muted-foreground" />Not connected</span></SelectItem>
-                <SelectItem value="voicemail">Voicemail</SelectItem>
-                <SelectItem value="busy">Busy</SelectItem>
-                <SelectItem value="wrong_number">Wrong number</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="px-5 py-4 space-y-4">
 
-          <div>
-            <Label className="text-xs text-muted-foreground">Update lead status</Label>
-            <Select value={leadStatusId ?? ""} onValueChange={setLeadStatusId}>
-              <SelectTrigger><SelectValue placeholder="Keep current" /></SelectTrigger>
-              <SelectContent>{statuses.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  <span className="inline-flex items-center gap-2"><span className="size-2 rounded-full" style={{ background: s.color }} />{s.name}</span>
-                </SelectItem>
-              ))}</SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label className="text-xs text-muted-foreground flex items-center gap-1"><MessageSquare className="size-3" />Note</Label>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What happened on this call?" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><ListTodo className="size-3" />Task</Label>
-              <Input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Optional" />
-              <Input type="datetime-local" value={taskDue} onChange={(e) => setTaskDue(e.target.value)} className="mt-1.5" />
+          {/* Call Outcome + Lead Status — side by side */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <PhoneCall className="size-3" /> Call outcome
+              </Label>
+              <Select value={callStatus} onValueChange={(v) => setCallStatus(v as CallStatus)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="connected">
+                    <span className="flex items-center gap-2"><PhoneCall className="size-3 text-emerald-600" />Connected</span>
+                  </SelectItem>
+                  <SelectItem value="not_connected">
+                    <span className="flex items-center gap-2"><PhoneOff className="size-3 text-muted-foreground" />Not connected</span>
+                  </SelectItem>
+                  <SelectItem value="voicemail">Voicemail</SelectItem>
+                  <SelectItem value="busy">Busy</SelectItem>
+                  <SelectItem value="wrong_number">Wrong number</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground flex items-center gap-1"><CalendarPlus className="size-3" />Schedule meeting</Label>
-              <Input type="datetime-local" value={meetingAt} onChange={(e) => setMeetingAt(e.target.value)} />
-              <Button variant="outline" size="sm" onClick={whatsapp} disabled={!lead.phone} className="w-full mt-1.5">WhatsApp</Button>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Lead status</Label>
+              <Select value={leadStatusId ?? ""} onValueChange={setLeadStatusId}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  {statuses.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="size-2 rounded-full shrink-0" style={{ background: s.color }} />
+                        {s.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          {/* Labels */}
+          {labels.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <Tag className="size-3" /> Labels
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((l) => {
+                  const selected = selectedLabels.has(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => toggleLabel(l.id)}
+                      className={cn(
+                        "px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all",
+                        selected
+                          ? "text-white border-transparent"
+                          : "bg-transparent border-border text-muted-foreground hover:border-foreground/40"
+                      )}
+                      style={selected ? { backgroundColor: l.color, borderColor: l.color } : {}}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+              <MessageSquare className="size-3" /> Note
+            </Label>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              placeholder="What happened on this call?"
+              className="resize-none text-sm"
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="border-t" />
+
+          {/* Task */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+              <ListTodo className="size-3" /> Task <span className="text-muted-foreground/60">(optional)</span>
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Task title"
+                className="text-sm h-9 flex-1"
+              />
+              <Input
+                type="datetime-local"
+                value={taskDue}
+                onChange={(e) => setTaskDue(e.target.value)}
+                className="text-sm h-9 w-40 shrink-0"
+              />
+            </div>
+          </div>
+
+          {/* Meeting */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+              <CalendarPlus className="size-3" /> Schedule meeting <span className="text-muted-foreground/60">(optional)</span>
+            </Label>
+            <Input
+              type="datetime-local"
+              value={meetingAt}
+              onChange={(e) => setMeetingAt(e.target.value)}
+              className="text-sm h-9"
+            />
           </div>
         </div>
 
-        <div className="flex gap-2 mt-4">
+        {/* Footer */}
+        <div className="px-5 pb-5 flex gap-2 border-t pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={whatsapp}
+            disabled={!lead.phone}
+            className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <MessageCircle className="size-4" /> WhatsApp
+          </Button>
+
           {!expired ? (
             <Button onClick={() => commit(true)} disabled={busy} className="flex-1 bg-gradient-primary">
-              {busy && <Loader2 className="size-4 mr-2 animate-spin" />}Save & Next
+              {busy && <Loader2 className="size-4 mr-2 animate-spin" />}
+              Save & Next
             </Button>
           ) : (
             <>
               <Button variant="outline" onClick={() => { setSeconds(15); setExpired(false); }} className="flex-1">+15s</Button>
-              <Button onClick={() => commit(true)} disabled={busy} className="flex-1 bg-gradient-primary">Next lead</Button>
+              <Button onClick={() => commit(true)} disabled={busy} className="flex-1 bg-gradient-primary">
+                {busy && <Loader2 className="size-4 mr-2 animate-spin" />}
+                Next lead
+              </Button>
             </>
           )}
         </div>
