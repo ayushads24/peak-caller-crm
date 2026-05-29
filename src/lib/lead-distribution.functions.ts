@@ -97,6 +97,60 @@ async function applyAssignments(
   return { updated };
 }
 
+// ---------- Auto-assign on lead creation ----------
+
+export async function autoAssignNewLead(leadId: string): Promise<void> {
+  const { data: rules } = await supabaseAdmin
+    .from("distribution_rules")
+    .select("*")
+    .eq("is_active", true)
+    .neq("method", "manual")
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  const rule = rules?.[0];
+  if (!rule) return;
+
+  const cfg = (rule.config ?? {}) as Record<string, unknown>;
+  let pool: string[] = (cfg.members as string[]) ?? [];
+  if (pool.length === 0) return;
+
+  if (rule.method === "availability") {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: att } = await supabaseAdmin
+      .from("attendance").select("user_id, punch_out_at")
+      .eq("work_date", today).in("user_id", pool);
+    const punchedIn = new Set((att ?? []).filter((a: { punch_out_at: string | null }) => !a.punch_out_at).map((a: { user_id: string }) => a.user_id));
+    const { data: breaks } = await supabaseAdmin
+      .from("breaks").select("user_id").is("ended_at", null).in("user_id", pool);
+    const onBreak = new Set((breaks ?? []).map((b: { user_id: string }) => b.user_id));
+    const available = pool.filter((m) => punchedIn.has(m) && !onBreak.has(m));
+    if (available.length > 0) pool = available;
+  }
+
+  const startIndex = (cfg.last_assigned_index as number) ?? 0;
+  const userId = pool[startIndex % pool.length];
+
+  await supabaseAdmin
+    .from("leads")
+    .update({ assigned_to: userId, assigned_at: new Date().toISOString() } as never)
+    .eq("id", leadId);
+
+  await supabaseAdmin
+    .from("distribution_rules")
+    .update({ config: { ...cfg, last_assigned_index: (startIndex + 1) % pool.length } } as never)
+    .eq("id", rule.id);
+
+  await supabaseAdmin.from("lead_assignment_history").insert({
+    lead_id: leadId,
+    from_user_id: null,
+    to_user_id: userId,
+    assigned_by: null,
+    method: rule.method,
+    reason: `Auto: ${rule.name}`,
+  } as never);
+}
+
 // ---------- Rules CRUD ----------
 
 export const listDistributionRules = createServerFn({ method: "GET" })

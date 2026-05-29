@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sanitizePhone } from "@/lib/utils";
+import { autoAssignNewLead } from "@/lib/lead-distribution.functions";
 
 export const Route = createFileRoute("/api/public/webhook/facebook")({
   server: {
@@ -57,13 +58,20 @@ export const Route = createFileRoute("/api/public/webhook/facebook")({
                 .from("leads").select("id").eq("phone", phone).limit(1).maybeSingle();
               if (dup) continue;
             }
-            const { error } = await supabaseAdmin.from("leads").insert({
+            const { data: newLead, error } = await supabaseAdmin.from("leads").insert({
               client_name: name,
               phone: phone || null,
               email,
               lead_source: "Facebook Lead Ads",
-            });
-            if (!error) created++;
+            }).select("id").single();
+            if (!error) {
+              created++;
+              if (newLead?.id) {
+                await autoAssignNewLead(newLead.id).catch((e) =>
+                  console.error("[Facebook] auto-assign failed:", e?.message)
+                );
+              }
+            }
           }
         }
         return Response.json({ ok: true, created });

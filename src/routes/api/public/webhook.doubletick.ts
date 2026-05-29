@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sanitizePhone } from "@/lib/utils";
+import { autoAssignNewLead } from "@/lib/lead-distribution.functions";
 
 // Recursively search any JSON value for a phone-like string (10-13 digits)
 function extractPhone(val: unknown, depth = 0): string {
@@ -143,6 +144,12 @@ export const Route = createFileRoute("/api/public/webhook/doubletick")({
           .insert({ client_name: name, phone, lead_source: "DoubleTick WhatsApp", doubletick_contact_id } as any)
           .select("id").single();
         if (error) return new Response(`DB error: ${error.message}`, { status: 500 });
+
+        if (lead?.id) {
+          await autoAssignNewLead(lead.id).catch((e) =>
+            console.error("[DoubleTick] auto-assign failed:", e?.message)
+          );
+        }
 
         return Response.json({ ok: true, lead_id: lead?.id });
       },
