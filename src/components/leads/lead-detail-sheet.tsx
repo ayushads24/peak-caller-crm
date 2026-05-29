@@ -42,6 +42,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { toast } from "sonner";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { whatsappUrl } from "@/lib/utils";
+import { useCallTracker, setPendingCall } from "@/hooks/use-call-tracker";
 
 export interface LeadRow {
   id: string;
@@ -98,6 +99,7 @@ export function LeadDetailSheet({
 }) {
   const { user } = useAuth();
   useAndroidBack(open, () => onOpenChange(false));
+  useCallTracker();
   const canDelete = true;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
@@ -350,6 +352,17 @@ export function LeadDetailSheet({
             <div className="grid grid-cols-2 gap-1.5 flex-1">
               <QuickAction
                 href={edit.phone ? `tel:${edit.phone}` : undefined}
+                onClick={() => {
+                  if (edit.phone && user) {
+                    setPendingCall({
+                      leadId: edit.id,
+                      leadName: edit.client_name,
+                      phone: edit.phone,
+                      userId: user.id,
+                      startTime: Date.now(),
+                    });
+                  }
+                }}
                 icon={<Phone className="size-3.5" />}
                 label="Call"
                 tone="text-sky-600"
@@ -815,12 +828,14 @@ function QuickAction({
   label,
   tone,
   external,
+  onClick,
 }: {
   href?: string;
   icon: React.ReactNode;
   label: string;
   tone?: string;
   external?: boolean;
+  onClick?: () => void;
 }) {
   if (!href) {
     return (
@@ -844,6 +859,7 @@ function QuickAction({
     >
       <a
         href={href}
+        onClick={onClick}
         {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
       >
         <span className={tone}>{icon}</span>
