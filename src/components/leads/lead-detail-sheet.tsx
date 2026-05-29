@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useAndroidBack } from "@/hooks/use-android-back";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ export function LeadDetailSheet({
   onPrev?: () => void;
 }) {
   const { user } = useAuth();
+  useAndroidBack(open, () => onOpenChange(false));
   const canDelete = true;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";

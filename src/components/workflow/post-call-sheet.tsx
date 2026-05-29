@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search, UserCheck } from "lucide-react";
 import { cn, whatsappUrl } from "@/lib/utils";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { useAndroidBack } from "@/hooks/use-android-back";
 
 interface Status { id: string; name: string; color: string; }
 interface LabelRow { id: string; name: string; color: string; }
@@ -35,6 +36,7 @@ export function PostCallSheet({
 }) {
   const { user } = useAuth();
   const appSettings = useAppSettings();
+  useAndroidBack(open, () => onOpenChange(false));
   const [callStatus, setCallStatus] = useState<CallStatus>("connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState<string>("");
