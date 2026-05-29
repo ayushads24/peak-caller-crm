@@ -241,8 +241,25 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
         if (cat.statusId === FOLLOWUP_KEY) return !l.status_id || !terminalIds.has(l.status_id);
         return true;
       });
+
+      // Exclude leads that have a pending task due in the future
+      const batchIds = filtered.map((l) => l.id);
+      let futureTaskLeadIds = new Set<string>();
+      if (batchIds.length > 0) {
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        const { data: futureTasks } = await supabase
+          .from("tasks")
+          .select("lead_id")
+          .in("lead_id", batchIds)
+          .eq("status", "pending")
+          .gt("due_date", todayEnd.toISOString());
+        futureTaskLeadIds = new Set((futureTasks ?? []).map((t: { lead_id: string }) => t.lead_id));
+      }
+
       for (const l of filtered) {
         if (seen.has(l.id)) continue;
+        if (futureTaskLeadIds.has(l.id)) continue; // skip — follow-up scheduled for future
         seen.add(l.id);
         queue.push({ lead_id: l.id, category: meta.category, priority: priority++, attempts_planned: cat.attempts });
       }
