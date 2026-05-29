@@ -597,12 +597,9 @@ export function LeadDetailSheet({
           </div>
 
           {/* RIGHT: activity rail */}
-          <div className="overflow-y-auto px-5 py-5 bg-muted/30">
+          <div className="overflow-y-auto px-5 py-5 bg-indigo-50/40 dark:bg-indigo-950/20">
           <Tabs defaultValue="notes">
             <TabsList className="grid grid-cols-4 w-full sticky top-0 z-10">
-              <TabsTrigger value="info" className="text-xs">
-                Info
-              </TabsTrigger>
               <TabsTrigger value="notes" className="text-xs">
                 <MessageSquare className="size-3 mr-1" />
                 Notes {notes.length}
@@ -615,40 +612,23 @@ export function LeadDetailSheet({
                 <ActivityIcon className="size-3 mr-1" />
                 Log
               </TabsTrigger>
+              <TabsTrigger value="info" className="text-xs">
+                Info
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="info" className="mt-4 space-y-3">
-              <div className="space-y-2">
-                {[
-                  { label: "Sales Value", value: edit.sales_value != null ? `₹${edit.sales_value.toLocaleString("en-IN")}` : "—" },
-                  { label: "Source", value: edit.lead_source || "—" },
-                  { label: "Status", value: status?.name || "—", color: status?.color },
-                  { label: "Assigned To", value: assignedProfile?.full_name || assignedProfile?.email || "Unassigned" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
-                    <span className="text-muted-foreground text-xs">{label}</span>
-                    <span className="font-medium flex items-center gap-1.5">
-                      {color && <span className="size-2 rounded-full shrink-0" style={{ background: color }} />}
-                      {value}
-                    </span>
-                  </div>
-                ))}
-                {assignedLabels.length > 0 && (
-                  <div className="rounded-lg border bg-card px-3 py-2.5">
-                    <p className="text-muted-foreground text-xs mb-2">Labels</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {assignedLabels.map((l) => (
-                        <Badge key={l.id} style={{ background: l.color, color: "white" }} className="border-0 gap-1 pr-1">
-                          {l.name}
-                          <button onClick={() => removeLabel(l.id)} className="hover:bg-black/20 rounded-sm p-0.5">
-                            <X className="size-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <TabsContent value="info" className="mt-4 space-y-2">
+              {[
+                { label: "Sales Value", value: edit.sales_value != null ? `₹${edit.sales_value.toLocaleString("en-IN")}` : "—" },
+                { label: "Source", value: edit.lead_source || "—" },
+                { label: "Assigned To", value: assignedProfile?.full_name || assignedProfile?.email || "Unassigned" },
+                { label: "Customer ID", value: edit.doubletick_contact_id || "—" },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
+                  <span className="text-muted-foreground text-xs">{label}</span>
+                  <span className="font-medium font-mono text-xs">{value}</span>
+                </div>
+              ))}
             </TabsContent>
 
             <TabsContent value="notes" className="space-y-3 mt-4">
