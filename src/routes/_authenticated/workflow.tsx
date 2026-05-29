@@ -43,6 +43,8 @@ import {
 } from "@/components/leads/lead-detail-sheet";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { whatsappUrl } from "@/lib/utils";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 export const Route = createFileRoute("/_authenticated/workflow")({ component: Page });
 
@@ -96,6 +98,7 @@ const CAT_META: Record<FlowCategory, { label: string; icon: typeof Flame; color:
 function Page() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const appSettings = useAppSettings();
   const [flowId, setFlowId] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [leadsMap, setLeadsMap] = useState<Map<string, Lead>>(new Map());
@@ -755,8 +758,8 @@ function Page() {
                     variant="outline"
                     size="lg"
                     onClick={() => {
-                      const p = currentLead.phone!.replace(/\D/g, "");
-                      window.open(`https://wa.me/${p}`, "_blank");
+                      const url = whatsappUrl(currentLead.phone, appSettings.doubletick_chat_url ?? "");
+                      if (url) window.open(url, "_blank");
                     }}
                   >
                     <MessageCircle className="size-4 mr-2" />

@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search, UserCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, whatsappUrl } from "@/lib/utils";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 interface Status { id: string; name: string; color: string; }
 interface LabelRow { id: string; name: string; color: string; }
@@ -33,6 +34,7 @@ export function PostCallSheet({
   durationStartedAt: number | null;
 }) {
   const { user } = useAuth();
+  const appSettings = useAppSettings();
   const [callStatus, setCallStatus] = useState<CallStatus>("connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState<string>("");
@@ -130,7 +132,8 @@ export function PostCallSheet({
 
   function whatsapp() {
     if (!lead?.phone) return;
-    window.open(`https://wa.me/${lead.phone.replace(/\D/g, "")}`, "_blank");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    if (url) window.open(url, "_blank");
   }
 
   const timerColor = expired

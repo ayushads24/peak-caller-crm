@@ -42,7 +42,8 @@ import {
 import { isSameDay } from "date-fns";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, whatsappUrl } from "@/lib/utils";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 export const Route = createFileRoute("/_authenticated/my-tasks")({ component: Page });
 
@@ -349,6 +350,7 @@ function TaskItem({
   assignee?: ProfileLite;
   onOpen: () => void;
 }) {
+  const appSettings = useAppSettings();
   const due = task.due_date ? new Date(task.due_date) : null;
   const dueIST = due ? istWall(due) : null;
   const nowI = nowIST();
@@ -364,8 +366,8 @@ function TaskItem({
   function whatsapp(e: React.MouseEvent) {
     e.stopPropagation();
     if (!lead?.phone) return toast.error("No phone number on lead");
-    const phone = lead.phone.replace(/\D/g, "");
-    window.open(`https://wa.me/${phone}`, "_blank");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    if (url) window.open(url, "_blank");
   }
 
   return (
@@ -442,6 +444,7 @@ function TaskActionsDialog({
   onChanged: () => void;
 }) {
   const { user } = useAuth();
+  const appSettings = useAppSettings();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [reschedDate, setReschedDate] = useState<string>("");
@@ -523,8 +526,8 @@ function TaskActionsDialog({
   }
   function whatsapp() {
     if (!lead?.phone) return toast.error("No phone number");
-    const phone = lead.phone.replace(/\D/g, "");
-    window.open(`https://wa.me/${phone}`, "_blank");
+    const url = whatsappUrl(lead.phone, appSettings.doubletick_chat_url ?? "");
+    if (url) window.open(url, "_blank");
   }
 
   return (
