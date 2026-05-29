@@ -903,6 +903,7 @@ function Page() {
         lead={postLead}
         statuses={statuses}
         labels={labels}
+        profiles={profiles}
         durationStartedAt={callStartedAt}
         onComplete={(cs) => {
           setCallStartedAt(null);

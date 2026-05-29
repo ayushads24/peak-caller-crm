@@ -8,33 +8,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search } from "lucide-react";
+import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Status { id: string; name: string; color: string; }
 interface LabelRow { id: string; name: string; color: string; }
+interface ProfileLite { id: string; full_name: string | null; email: string | null; }
 type CallStatus = "connected" | "not_connected" | "voicemail" | "busy" | "wrong_number";
 
+function avatar(p: ProfileLite) {
+  return (p.full_name?.trim() || p.email || "?")[0].toUpperCase();
+}
+
 export function PostCallSheet({
-  open, onOpenChange, lead, statuses, labels = [], onComplete, durationStartedAt,
+  open, onOpenChange, lead, statuses, labels = [], profiles = [], onComplete, durationStartedAt,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  lead: { id: string; client_name: string; phone: string | null; status_id: string | null } | null;
+  lead: { id: string; client_name: string; phone: string | null; status_id: string | null; assigned_to?: string | null } | null;
   statuses: Status[];
   labels?: LabelRow[];
+  profiles?: ProfileLite[];
   onComplete: (callStatus: CallStatus) => void;
   durationStartedAt: number | null;
 }) {
   const { user } = useAuth();
   const [callStatus, setCallStatus] = useState<CallStatus>("connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
+  const [assignTo, setAssignTo] = useState<string>("");
   const [selectedLabels, setSelectedLabels] = useState<LabelRow[]>([]);
   const [labelSearch, setLabelSearch] = useState("");
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false);
   const [note, setNote] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [taskAssignTo, setTaskAssignTo] = useState<string>("");
   const [seconds, setSeconds] = useState(45);
   const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,6 +52,8 @@ export function PostCallSheet({
     if (!open || !lead) return;
     setCallStatus("connected");
     setLeadStatusId(lead.status_id);
+    setAssignTo(lead.assigned_to ?? "");
+    setTaskAssignTo("");
     setSelectedLabels([]);
     setLabelSearch("");
     setNote(""); setTaskTitle(""); setTaskDue("");
@@ -64,18 +74,13 @@ export function PostCallSheet({
   if (!lead) return null;
 
   const availableLabels = labels.filter(
-    (l) =>
-      !selectedLabels.find((s) => s.id === l.id) &&
+    (l) => !selectedLabels.find((s) => s.id === l.id) &&
       l.name.toLowerCase().includes(labelSearch.toLowerCase())
   );
 
   function addLabel(l: LabelRow) {
     setSelectedLabels((prev) => [...prev, l]);
     setLabelSearch("");
-  }
-
-  function removeLabel(id: string) {
-    setSelectedLabels((prev) => prev.filter((l) => l.id !== id));
   }
 
   async function commit(advance: boolean) {
@@ -87,8 +92,15 @@ export function PostCallSheet({
       lead_id: lead.id, user_id: user.id, status: callStatus, duration_seconds: duration, notes: note || null,
     });
 
-    if (leadStatusId && leadStatusId !== lead.status_id) {
-      await supabase.from("leads").update({ status_id: leadStatusId }).eq("id", lead.id);
+    // Update lead: status + assignment
+    const leadUpdate: Record<string, unknown> = {};
+    if (leadStatusId && leadStatusId !== lead.status_id) leadUpdate.status_id = leadStatusId;
+    if (assignTo && assignTo !== (lead.assigned_to ?? "")) {
+      leadUpdate.assigned_to = assignTo;
+      leadUpdate.assigned_at = new Date().toISOString();
+    }
+    if (Object.keys(leadUpdate).length > 0) {
+      await supabase.from("leads").update(leadUpdate).eq("id", lead.id);
     }
 
     if (note.trim()) {
@@ -97,7 +109,11 @@ export function PostCallSheet({
 
     if (taskTitle.trim()) {
       await supabase.from("tasks").insert({
-        lead_id: lead.id, title: taskTitle, created_by: user.id, status: "pending",
+        lead_id: lead.id,
+        title: taskTitle,
+        created_by: user.id,
+        assigned_to: taskAssignTo || user.id,
+        status: "pending",
         due_date: taskDue ? new Date(taskDue).toISOString() : null,
       });
     }
@@ -114,14 +130,12 @@ export function PostCallSheet({
 
   function whatsapp() {
     if (!lead?.phone) return;
-    const phone = lead.phone.replace(/\D/g, "");
-    window.open(`https://wa.me/${phone}`, "_blank");
+    window.open(`https://wa.me/${lead.phone.replace(/\D/g, "")}`, "_blank");
   }
 
   const timerColor = expired
     ? "bg-destructive/10 text-destructive"
-    : seconds <= 10
-    ? "bg-amber-500/15 text-amber-600"
+    : seconds <= 10 ? "bg-amber-500/15 text-amber-600"
     : "bg-primary/10 text-primary";
 
   return (
@@ -178,6 +192,31 @@ export function PostCallSheet({
             </div>
           </div>
 
+          {/* Assign Lead */}
+          {profiles.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <UserCheck className="size-3" /> Assign lead to
+              </Label>
+              <Select value={assignTo} onValueChange={setAssignTo}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="size-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {avatar(p)}
+                        </span>
+                        {p.full_name || p.email}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Labels */}
           {labels.length > 0 && (
             <div className="space-y-1.5">
@@ -185,7 +224,6 @@ export function PostCallSheet({
                 <Tag className="size-3" /> Labels
               </Label>
               <div className="flex flex-wrap items-center gap-1.5">
-                {/* Selected labels */}
                 {selectedLabels.map((l) => (
                   <span
                     key={l.id}
@@ -193,19 +231,14 @@ export function PostCallSheet({
                     style={{ backgroundColor: l.color }}
                   >
                     {l.name}
-                    <button type="button" onClick={() => removeLabel(l.id)} className="opacity-70 hover:opacity-100">
-                      <X className="size-3" />
+                    <button type="button" onClick={() => setSelectedLabels((p) => p.filter((x) => x.id !== l.id))}>
+                      <X className="size-3 opacity-70 hover:opacity-100" />
                     </button>
                   </span>
                 ))}
-
-                {/* Add label button */}
                 <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
                   <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
-                    >
+                    <button type="button" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors">
                       <Plus className="size-3" /> Add label
                     </button>
                   </PopoverTrigger>
@@ -225,19 +258,17 @@ export function PostCallSheet({
                         <p className="text-xs text-muted-foreground text-center py-2">
                           {labelSearch ? "No match" : "All labels added"}
                         </p>
-                      ) : (
-                        availableLabels.map((l) => (
-                          <button
-                            key={l.id}
-                            type="button"
-                            onClick={() => { addLabel(l); setLabelPopoverOpen(false); }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted text-sm text-left"
-                          >
-                            <span className="size-2.5 rounded-full shrink-0" style={{ background: l.color }} />
-                            {l.name}
-                          </button>
-                        ))
-                      )}
+                      ) : availableLabels.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => { addLabel(l); setLabelPopoverOpen(false); }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted text-sm text-left"
+                        >
+                          <span className="size-2.5 rounded-full shrink-0" style={{ background: l.color }} />
+                          {l.name}
+                        </button>
+                      ))}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -273,12 +304,26 @@ export function PostCallSheet({
               className="text-sm h-9"
             />
             {taskTitle && (
-              <Input
-                type="datetime-local"
-                value={taskDue}
-                onChange={(e) => setTaskDue(e.target.value)}
-                className="text-sm h-9"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="datetime-local"
+                  value={taskDue}
+                  onChange={(e) => setTaskDue(e.target.value)}
+                  className="text-sm h-9"
+                />
+                {profiles.length > 0 && (
+                  <Select value={taskAssignTo} onValueChange={setTaskAssignTo}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Assign to" /></SelectTrigger>
+                    <SelectContent>
+                      {profiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.full_name || p.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -294,7 +339,6 @@ export function PostCallSheet({
           >
             <MessageCircle className="size-4" />
           </Button>
-
           {!expired ? (
             <Button onClick={() => commit(true)} disabled={busy} className="flex-1 bg-gradient-primary">
               {busy && <Loader2 className="size-4 mr-2 animate-spin" />}
