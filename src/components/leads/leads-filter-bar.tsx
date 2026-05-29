@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch, User as UserIcon } from "lucide-react";
+import { Search, X, RotateCcw, CalendarIcon, ChevronDown, ArrowRight, GitBranch, User as UserIcon, SlidersHorizontal } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { StatusRow, LabelRow } from "@/components/leads/lead-detail-sheet";
@@ -81,6 +81,7 @@ export function LeadsFilterBar({
   teams: { id: string; name: string }[];
 }) {
   const count = useMemo(() => activeCount(filters), [filters]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   function set<K extends keyof LeadFilters>(k: K, v: LeadFilters[K]) { onChange({ ...filters, [k]: v }); }
   function toggleArr(k: "statusIds" | "labelIds" | "sources", v: string) {
@@ -88,52 +89,76 @@ export function LeadsFilterBar({
     onChange({ ...filters, [k]: arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v] });
   }
 
+  const filterControls = (
+    <>
+      <MultiPopover
+        label="Status"
+        selected={filters.statusIds}
+        options={statuses.map((s) => ({ value: s.id, label: s.name, color: s.color }))}
+        onToggle={(v) => toggleArr("statusIds", v)}
+        onClear={() => set("statusIds", [])}
+      />
+      <MultiPopover
+        label="Label"
+        selected={filters.labelIds}
+        options={labels.map((l) => ({ value: l.id, label: l.name, color: l.color }))}
+        onToggle={(v) => toggleArr("labelIds", v)}
+        onClear={() => set("labelIds", [])}
+      />
+      <MultiPopover
+        label="Source"
+        selected={filters.sources}
+        options={LEAD_SOURCES.map((s) => ({ value: s, label: s }))}
+        onToggle={(v) => toggleArr("sources", v)}
+        onClear={() => set("sources", [])}
+      />
+      <AssignedFilter filters={filters} onChange={onChange} profiles={profiles} />
+      <DateFilter filters={filters} onChange={onChange} />
+      <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
+      <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)} disabled={count === 0} className="gap-1">
+        <RotateCcw className="size-4" /> Reset
+      </Button>
+    </>
+  );
+
   return (
     <Card className="sticky top-2 z-30 mt-5 p-3 sm:p-4 shadow-card backdrop-blur bg-card/95">
-      {/* Row 1: live search + quick popovers */}
-      <div className="flex flex-col lg:flex-row gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      {/* Search + Filter toggle (mobile) / full row (desktop) */}
+      <div className="flex gap-2">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Live search: name, email, phone, source…"
+            placeholder="Search: name, phone, email…"
             value={filters.q}
             onChange={(e) => set("q", e.target.value)}
             className="pl-9"
           />
         </div>
 
-        <MultiPopover
-          label="Status"
-          selected={filters.statusIds}
-          options={statuses.map((s) => ({ value: s.id, label: s.name, color: s.color }))}
-          onToggle={(v) => toggleArr("statusIds", v)}
-          onClear={() => set("statusIds", [])}
-        />
-        <MultiPopover
-          label="Label"
-          selected={filters.labelIds}
-          options={labels.map((l) => ({ value: l.id, label: l.name, color: l.color }))}
-          onToggle={(v) => toggleArr("labelIds", v)}
-          onClear={() => set("labelIds", [])}
-        />
-        <MultiPopover
-          label="Source"
-          selected={filters.sources}
-          options={LEAD_SOURCES.map((s) => ({ value: s, label: s }))}
-          onToggle={(v) => toggleArr("sources", v)}
-          onClear={() => set("sources", [])}
-        />
-
-        <AssignedFilter filters={filters} onChange={onChange} profiles={profiles} />
-
-        <DateFilter filters={filters} onChange={onChange} />
-
-        <MovementFilter filters={filters} onChange={onChange} statuses={statuses} />
-
-        <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)} disabled={count === 0} className="gap-1">
-          <RotateCcw className="size-4" /> Reset
+        {/* Mobile: Filter toggle button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="lg:hidden shrink-0 gap-1.5"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <SlidersHorizontal className="size-4" />
+          Filter
+          {count > 0 && <Badge className="h-5 px-1.5 ml-0.5">{count}</Badge>}
         </Button>
+
+        {/* Desktop: all filters inline */}
+        <div className="hidden lg:flex gap-2 flex-wrap">
+          {filterControls}
+        </div>
       </div>
+
+      {/* Mobile: collapsible filter panel */}
+      {filtersOpen && (
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t lg:hidden">
+          {filterControls}
+        </div>
+      )}
 
       {count > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-3">
