@@ -488,6 +488,18 @@ function Page() {
     toast.message("Auto-calling stopped");
   }
 
+  async function endWorkflow() {
+    if (!flowId) return;
+    if (!window.confirm("Aaj ka workflow band karna chahte ho? Ye action undo nahi hogi.")) return;
+    setAutoMode("off");
+    lastAutoCalledItemId.current = null;
+    await supabase.from("calling_flows").update({ status: "ended" }).eq("id", flowId);
+    setFlowId(null);
+    setItems([]);
+    setLeadsMap(new Map());
+    toast.success("Workflow ended");
+  }
+
   if (loading) {
     return (
       <div className="min-h-[60vh] grid place-items-center">
@@ -561,6 +573,14 @@ function Page() {
           <Button variant="outline" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4 mr-1" />
             New workflow
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void endWorkflow()}
+            className="text-destructive hover:text-destructive border-destructive/40"
+          >
+            <StopCircle className="size-4 mr-1" />
+            End Workflow
           </Button>
           <NotificationBell />
           {autoMode === "off" ? (
