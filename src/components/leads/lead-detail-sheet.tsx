@@ -124,6 +124,7 @@ export function LeadDetailSheet({
   const [edit, setEdit] = useState<LeadRow | null>(null);
   const [saving, setSaving] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRef = useRef<LeadRow | null>(null);
 
   const save = useCallback(async () => {
     if (!edit) return;
@@ -144,6 +145,7 @@ export function LeadDetailSheet({
       .eq("id", edit.id);
     setSaving(false);
     if (error) return toast.error(error.message);
+    savedRef.current = { ...edit };
     toast.success("Lead updated", { id: "lead-updated" });
     onChanged();
     void loadRelated(edit.id);
@@ -151,6 +153,7 @@ export function LeadDetailSheet({
 
   useEffect(() => {
     setEdit(lead);
+    savedRef.current = lead;
     if (lead) void loadRelated(lead.id);
   }, [lead]);
 
@@ -191,18 +194,19 @@ export function LeadDetailSheet({
     setLeadLabelIds((ll.data ?? []).map((r: { label_id: string }) => r.label_id));
   }
 
-  /* Auto-save when edit diverges from lead */
+  /* Auto-save when edit diverges from last saved state */
   useEffect(() => {
     if (!edit || !lead) return;
+    const base = savedRef.current ?? lead;
     const changed =
-      edit.client_name !== lead.client_name ||
-      edit.email !== lead.email ||
-      edit.phone !== lead.phone ||
-      edit.sales_value !== lead.sales_value ||
-      edit.lead_source !== lead.lead_source ||
-      edit.status_id !== lead.status_id ||
-      edit.assigned_to !== lead.assigned_to ||
-      edit.doubletick_contact_id !== lead.doubletick_contact_id;
+      edit.client_name !== base.client_name ||
+      edit.email !== base.email ||
+      edit.phone !== base.phone ||
+      edit.sales_value !== base.sales_value ||
+      edit.lead_source !== base.lead_source ||
+      edit.status_id !== base.status_id ||
+      edit.assigned_to !== base.assigned_to ||
+      edit.doubletick_contact_id !== base.doubletick_contact_id;
     if (!changed) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
