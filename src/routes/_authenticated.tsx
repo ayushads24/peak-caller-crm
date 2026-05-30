@@ -44,11 +44,13 @@ function Layout() {
   const baseNav = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
   const canManageTeamFlows = roles.includes("admin") || roles.includes("team_leader");
   const navItems: { to: string; icon: typeof LayoutDashboard; label: string }[] = [...baseNav];
-  if (canManageTeamFlows) {
+  {
     const dashIdx = navItems.findIndex((i) => i.to === "/dashboard");
     const lbItem = { to: "/leaderboard", icon: Trophy, label: "Leaderboard" };
     if (dashIdx >= 0) navItems.splice(dashIdx + 1, 0, lbItem);
     else navItems.push(lbItem);
+  }
+  if (canManageTeamFlows) {
     const lbIdx = navItems.findIndex((i) => i.to === "/leaderboard");
     const actItem = { to: "/activity", icon: Activity, label: "Activity" };
     if (lbIdx >= 0) navItems.splice(lbIdx + 1, 0, actItem);
