@@ -363,7 +363,7 @@ function Page() {
 
   async function startCall() {
     if (!current || !currentLead) return;
-    if (currentLead.phone) window.open(`tel:${currentLead.phone}`, '_system');
+    if (currentLead.phone) window.location.href = `tel:${currentLead.phone}`;
     setCallStartedAt(Date.now());
     if (current.status !== "in_progress") {
       await supabase
@@ -474,12 +474,22 @@ function Page() {
       flowStartedAt.current = Date.now();
       setAutoMode("running");
       toast.success("Auto-calling started");
+      // Directly trigger first call instead of relying on useEffect timing
+      if (current && currentLead && lastAutoCalledItemId.current !== current.id) {
+        lastAutoCalledItemId.current = current.id;
+        setTimeout(() => void startCall(), 500);
+      }
     } else if (autoMode === "running") {
       setAutoMode("paused");
       toast.message("Auto-calling paused");
     } else if (autoMode === "paused") {
       setAutoMode("running");
       toast.success("Auto-calling resumed");
+      // Resume - trigger call if current lead hasn't been called yet
+      if (current && currentLead && lastAutoCalledItemId.current !== current.id) {
+        lastAutoCalledItemId.current = current.id;
+        setTimeout(() => void startCall(), 500);
+      }
     }
   }
   function endAuto() {
