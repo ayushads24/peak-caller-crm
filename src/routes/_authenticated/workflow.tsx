@@ -363,7 +363,7 @@ function Page() {
 
   async function startCall() {
     if (!current || !currentLead) return;
-    if (currentLead.phone) window.location.href = `tel:${currentLead.phone}`;
+    if (currentLead.phone) window.open(`tel:${currentLead.phone}`, '_system');
     setCallStartedAt(Date.now());
     if (current.status !== "in_progress") {
       await supabase

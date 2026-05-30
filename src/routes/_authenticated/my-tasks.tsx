@@ -362,7 +362,7 @@ function TaskItem({
   function call(e: React.MouseEvent) {
     e.stopPropagation();
     if (!lead?.phone) return toast.error("No phone number on lead");
-    window.location.href = `tel:${lead.phone}`;
+    window.open(`tel:${lead.phone}`, '_system');
   }
   function whatsapp(e: React.MouseEvent) {
     e.stopPropagation();
@@ -523,7 +523,7 @@ function TaskActionsDialog({
 
   function call() {
     if (!lead?.phone) return toast.error("No phone number");
-    window.location.href = `tel:${lead.phone}`;
+    window.open(`tel:${lead.phone}`, '_system');
   }
   function whatsapp() {
     if (!lead?.phone) return toast.error("No phone number");
