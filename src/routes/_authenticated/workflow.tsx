@@ -539,26 +539,26 @@ function Page() {
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+      <div className="flex flex-col gap-2 mb-4">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Workflow</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {stats.done}/{stats.total} done · {stats.pending} pending · {stats.skipped} skipped
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
           {activeBreak ? (
             <Button
               onClick={endBreak}
               variant="outline"
-              className="border-amber-500/40 text-amber-600 hover:text-amber-700"
+              className="border-amber-500/40 text-amber-600 hover:text-amber-700 shrink-0"
             >
               <Play className="size-4 mr-2" />
               Resume from {activeBreak.type}
             </Button>
           ) : (
             <Select onValueChange={(v) => startBreak(v as Brk["type"])}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[130px] shrink-0">
                 <Coffee className="size-4 mr-1" />
                 <SelectValue placeholder="Break" />
               </SelectTrigger>
@@ -570,14 +570,14 @@ function Page() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" onClick={() => setCreateOpen(true)}>
+          <Button variant="outline" onClick={() => setCreateOpen(true)} className="shrink-0">
             <Plus className="size-4 mr-1" />
             New workflow
           </Button>
           <Button
             variant="outline"
             onClick={() => void endWorkflow()}
-            className="text-destructive hover:text-destructive border-destructive/40"
+            className="text-destructive hover:text-destructive border-destructive/40 shrink-0"
           >
             <StopCircle className="size-4 mr-1" />
             End Workflow
@@ -586,7 +586,7 @@ function Page() {
           {autoMode === "off" ? (
             <Button
               onClick={toggleAuto}
-              className="bg-gradient-primary shadow-glow"
+              className="bg-gradient-primary shadow-glow shrink-0"
               disabled={!current || !!activeBreak}
             >
               <Play className="size-4 mr-1" />
@@ -597,7 +597,7 @@ function Page() {
               <Button
                 onClick={toggleAuto}
                 variant="outline"
-                className="border-amber-500/40 text-amber-600 hover:text-amber-700"
+                className="border-amber-500/40 text-amber-600 hover:text-amber-700 shrink-0"
               >
                 <Pause className="size-4 mr-1" />
                 Pause
@@ -605,7 +605,7 @@ function Page() {
               <Button
                 onClick={endAuto}
                 variant="outline"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive shrink-0"
               >
                 <StopCircle className="size-4 mr-1" />
                 End
@@ -613,14 +613,14 @@ function Page() {
             </>
           ) : (
             <>
-              <Button onClick={toggleAuto} className="bg-gradient-primary">
+              <Button onClick={toggleAuto} className="bg-gradient-primary shrink-0">
                 <Play className="size-4 mr-1" />
                 Resume
               </Button>
               <Button
                 onClick={endAuto}
                 variant="outline"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive shrink-0"
               >
                 <StopCircle className="size-4 mr-1" />
                 End
