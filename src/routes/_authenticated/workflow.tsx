@@ -947,6 +947,7 @@ function Page() {
         durationStartedAt={callStartedAt}
         onComplete={(cs, newStatusId) => {
           setCallStartedAt(null);
+          lastAutoCalledItemId.current = null;
           void advance(cs === "not_connected", newStatusId);
         }}
       />
