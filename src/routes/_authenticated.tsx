@@ -106,18 +106,20 @@ function Layout() {
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border flex items-center justify-around px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border overflow-x-auto pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center min-w-max px-1 pt-2">
         {navItems.map((item) => (
-          <Link key={item.to} to={item.to} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground rounded-lg"
-            activeProps={{ className: "flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-primary rounded-lg" }}>
+          <Link key={item.to} to={item.to} className="flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium text-muted-foreground rounded-lg shrink-0"
+            activeProps={{ className: "flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium text-primary rounded-lg shrink-0" }}>
             <item.icon className="size-5" />
             {item.label}
           </Link>
         ))}
-        <button onClick={logout} className="flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium text-muted-foreground">
+        <button onClick={logout} className="flex flex-col items-center gap-0.5 px-3 py-1.5 text-[10px] font-medium text-muted-foreground shrink-0">
           <LogOut className="size-5" />
           Sign out
         </button>
+        </div>
       </nav>
     </div>
   );
