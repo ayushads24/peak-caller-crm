@@ -4,7 +4,7 @@ import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-a
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2 } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
@@ -44,6 +44,12 @@ function Layout() {
   const baseNav = allNav.filter((i) => isAdmin(roles) || hasPermission(permissions, i.perm));
   const canManageTeamFlows = roles.includes("admin") || roles.includes("team_leader");
   const navItems: { to: string; icon: typeof LayoutDashboard; label: string }[] = [...baseNav];
+  if (canManageTeamFlows) {
+    const dashIdx = navItems.findIndex((i) => i.to === "/dashboard");
+    const lbItem = { to: "/leaderboard", icon: Trophy, label: "Leaderboard" };
+    if (dashIdx >= 0) navItems.splice(dashIdx + 1, 0, lbItem);
+    else navItems.push(lbItem);
+  }
   if (canManageTeamFlows) {
     const wfIdx = navItems.findIndex((i) => i.to === "/workflow");
     const teamItem = { to: "/team-workflows", icon: ListChecks, label: "Team Workflows" };
