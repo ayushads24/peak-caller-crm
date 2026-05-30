@@ -144,7 +144,7 @@ export function LeadDetailSheet({
       .eq("id", edit.id);
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Lead updated");
+    toast.success("Lead updated", { id: "lead-updated" });
     onChanged();
     void loadRelated(edit.id);
   }, [edit, onChanged]);
