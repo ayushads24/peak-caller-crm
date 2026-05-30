@@ -253,7 +253,7 @@ function Page() {
               {period === "today" ? "Calls by Hour" : period === "week" ? "Calls by Day (This Week)" : "Calls by Day (This Month)"}
             </h2>
             <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary inline-block" /> Total</span>
+              <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm inline-block" style={{ background: "#6366f1" }} /> Total</span>
               <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-emerald-500 inline-block" /> Connected</span>
             </div>
           </div>
@@ -275,15 +275,18 @@ function Page() {
               />
               <Tooltip
                 contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
                   borderRadius: 8,
                   fontSize: 12,
+                  color: "#111827",
+                  boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
                 }}
-                cursor={{ fill: "hsl(var(--muted))", radius: 4 }}
+                cursor={{ fill: "#f3f4f6", radius: 4 }}
                 formatter={(value: number, name: string) => [value, name === "total" ? "Total Calls" : "Connected"]}
+                labelStyle={{ fontWeight: 600, color: "#111827", marginBottom: 4 }}
               />
-              <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={32} />
               <Bar dataKey="connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
