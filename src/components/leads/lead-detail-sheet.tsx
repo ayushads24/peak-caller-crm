@@ -130,6 +130,7 @@ export function LeadDetailSheet({
     if (!edit) return;
     setSaving(true);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const statusChanged = savedRef.current && edit.status_id !== savedRef.current.status_id;
     const { error } = await supabase
       .from("leads")
       .update({
@@ -141,6 +142,7 @@ export function LeadDetailSheet({
         status_id: edit.status_id,
         assigned_to: edit.assigned_to ?? null,
         doubletick_contact_id: edit.doubletick_contact_id ?? null,
+        ...(statusChanged ? { status_changed_at: new Date().toISOString() } : {}),
       } as any)
       .eq("id", edit.id);
     setSaving(false);

@@ -4,7 +4,7 @@ import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-a
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2, Trophy, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
@@ -49,6 +49,10 @@ function Layout() {
     const lbItem = { to: "/leaderboard", icon: Trophy, label: "Leaderboard" };
     if (dashIdx >= 0) navItems.splice(dashIdx + 1, 0, lbItem);
     else navItems.push(lbItem);
+    const lbIdx = navItems.findIndex((i) => i.to === "/leaderboard");
+    const actItem = { to: "/activity", icon: Activity, label: "Activity" };
+    if (lbIdx >= 0) navItems.splice(lbIdx + 1, 0, actItem);
+    else navItems.push(actItem);
   }
   if (canManageTeamFlows) {
     const wfIdx = navItems.findIndex((i) => i.to === "/workflow");

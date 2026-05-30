@@ -98,7 +98,10 @@ export function PostCallSheet({
 
     // Update lead: status + assignment
     const leadUpdate: Record<string, unknown> = {};
-    if (leadStatusId && leadStatusId !== lead.status_id) leadUpdate.status_id = leadStatusId;
+    if (leadStatusId && leadStatusId !== lead.status_id) {
+      leadUpdate.status_id = leadStatusId;
+      leadUpdate.status_changed_at = new Date().toISOString();
+    }
     if (assignTo && assignTo !== (lead.assigned_to ?? "")) {
       leadUpdate.assigned_to = assignTo;
       leadUpdate.assigned_at = new Date().toISOString();
