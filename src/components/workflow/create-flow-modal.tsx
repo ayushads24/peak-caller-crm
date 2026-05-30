@@ -228,7 +228,8 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
 
       let q = supabase.from("leads").select("id, status_id, created_at, updated_at")
         .gte("created_at", new Date(cat.fromDate).toISOString())
-        .lte("created_at", new Date(cat.toDate + "T23:59:59").toISOString());
+        .lte("created_at", new Date(cat.toDate + "T23:59:59").toISOString())
+        .order("created_at", { ascending: false });
       if (cat.statusId !== FOLLOWUP_KEY) {
         q = q.eq("status_id", cat.statusId);
       }
