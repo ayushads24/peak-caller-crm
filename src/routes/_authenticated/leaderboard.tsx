@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ function RateColor(rate: number) {
 }
 
 function Page() {
+  const { user, roles } = useAuth();
+  const isCaller = roles.length > 0 && !roles.includes("admin") && !roles.includes("team_leader") && !roles.includes("project_manager") && !roles.includes("manager");
   const [period, setPeriod] = useState<Period>("today");
   const [sortBy, setSortBy] = useState<SortBy>("calls");
   const [stats, setStats] = useState<CallerStat[]>([]);
@@ -60,14 +63,18 @@ function Page() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   async function load(p = period) {
+    if (!user) return;
     setLoading(true);
     const { from, to } = periodRange(p);
+    let callsQuery = supabase
+      .from("calls")
+      .select("user_id, status, duration_seconds, called_at")
+      .gte("called_at", from.toISOString())
+      .lte("called_at", to.toISOString());
+    if (isCaller) callsQuery = callsQuery.eq("user_id", user.id);
+
     const [callsRes, profilesRes] = await Promise.all([
-      supabase
-        .from("calls")
-        .select("user_id, status, duration_seconds, called_at")
-        .gte("called_at", from.toISOString())
-        .lte("called_at", to.toISOString()),
+      callsQuery,
       supabase.from("profiles_directory").select("id, full_name, email").order("full_name"),
     ]);
 
@@ -147,7 +154,7 @@ function Page() {
     setLoading(false);
   }
 
-  useEffect(() => { void load(period); }, [period]);
+  useEffect(() => { void load(period); }, [period, user?.id]);
 
   // Realtime — refresh on any new call
   useEffect(() => {
@@ -180,9 +187,9 @@ function Page() {
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Trophy className="size-7 text-amber-500" /> Leaderboard
+            <Trophy className="size-7 text-amber-500" /> {isCaller ? "My Stats" : "Leaderboard"}
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">{label} · Live rankings</p>
+          <p className="text-muted-foreground text-sm mt-1">{label} · {isCaller ? "Your personal call stats" : "Live rankings"}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Period selector */}
