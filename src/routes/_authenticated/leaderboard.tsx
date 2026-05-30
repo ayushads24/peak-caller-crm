@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Phone, CheckCircle2, TrendingUp, Clock, Trophy, RefreshCw } from "lucide-react";
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { Loader2, Phone, CheckCircle2, TrendingUp, Clock, Trophy, RefreshCw, BarChart2 } from "lucide-react";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, eachHourOfInterval, addHours } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export const Route = createFileRoute("/_authenticated/leaderboard")({ component: Page });
 
@@ -54,6 +55,7 @@ function Page() {
   const [period, setPeriod] = useState<Period>("today");
   const [sortBy, setSortBy] = useState<SortBy>("calls");
   const [stats, setStats] = useState<CallerStat[]>([]);
+  const [graphData, setGraphData] = useState<{ label: string; total: number; connected: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -63,7 +65,7 @@ function Page() {
     const [callsRes, profilesRes] = await Promise.all([
       supabase
         .from("calls")
-        .select("user_id, status, duration_seconds")
+        .select("user_id, status, duration_seconds, called_at")
         .gte("called_at", from.toISOString())
         .lte("called_at", to.toISOString()),
       supabase.from("profiles_directory").select("id, full_name, email").order("full_name"),
@@ -99,6 +101,48 @@ function Page() {
     }
 
     setStats(result);
+
+    // Build time-series graph data
+    if (p === "today") {
+      // Hourly buckets for today
+      const hours = eachHourOfInterval({ start: from, end: to });
+      const buckets = hours.map((h) => {
+        const hStart = h.getTime();
+        const hEnd = addHours(h, 1).getTime();
+        const slice = calls.filter((c) => {
+          const t = new Date(c.called_at as string).getTime();
+          return t >= hStart && t < hEnd;
+        });
+        return {
+          label: format(h, "ha"), // e.g. "9am"
+          total: slice.length,
+          connected: slice.filter((c) => c.status === "connected").length,
+        };
+      });
+      // Only keep hours up to now + trim leading zeros
+      const nowH = new Date().getHours();
+      const trimmed = buckets.slice(0, nowH + 1);
+      const firstNonZero = trimmed.findIndex((b) => b.total > 0);
+      setGraphData(firstNonZero >= 0 ? trimmed.slice(Math.max(0, firstNonZero - 1)) : trimmed.slice(-8));
+    } else {
+      // Daily buckets for week/month
+      const days = eachDayOfInterval({ start: from, end: to });
+      const buckets = days.map((d) => {
+        const dStart = startOfDay(d).getTime();
+        const dEnd = endOfDay(d).getTime();
+        const slice = calls.filter((c) => {
+          const t = new Date(c.called_at as string).getTime();
+          return t >= dStart && t <= dEnd;
+        });
+        return {
+          label: format(d, "d MMM"),
+          total: slice.length,
+          connected: slice.filter((c) => c.status === "connected").length,
+        };
+      });
+      setGraphData(buckets);
+    }
+
     setLastUpdated(new Date());
     setLoading(false);
   }
@@ -199,6 +243,52 @@ function Page() {
           </div>
         </Card>
       </div>
+
+      {/* Hourly / Daily call graph */}
+      {graphData.length > 0 && (
+        <Card className="p-4 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 className="size-4 text-primary" />
+            <h2 className="font-semibold text-sm">
+              {period === "today" ? "Calls by Hour" : period === "week" ? "Calls by Day (This Week)" : "Calls by Day (This Month)"}
+            </h2>
+            <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary inline-block" /> Total</span>
+              <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm bg-emerald-500 inline-block" /> Connected</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={graphData} barCategoryGap="30%" barGap={2}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                axisLine={false}
+                tickLine={false}
+                width={28}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                cursor={{ fill: "hsl(var(--muted))", radius: 4 }}
+                formatter={(value: number, name: string) => [value, name === "total" ? "Total Calls" : "Connected"]}
+              />
+              <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="connected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
 
       {/* Sort tabs */}
       <div className="flex gap-2 mb-4 flex-wrap">
