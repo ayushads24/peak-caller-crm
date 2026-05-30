@@ -45,6 +45,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { whatsappUrl } from "@/lib/utils";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { makeCall } from "@/hooks/use-phone-caller";
 
 export const Route = createFileRoute("/_authenticated/workflow")({ component: Page });
 
@@ -363,7 +364,7 @@ function Page() {
 
   async function startCall() {
     if (!current || !currentLead) return;
-    if (currentLead.phone) window.location.href = `tel:${currentLead.phone}`;
+    if (currentLead.phone) await makeCall(currentLead.phone);
     setCallStartedAt(Date.now());
     if (current.status !== "in_progress") {
       await supabase
