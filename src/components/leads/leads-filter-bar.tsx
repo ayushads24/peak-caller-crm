@@ -353,8 +353,8 @@ function DateFilter({ filters, onChange }: { filters: LeadFilters; onChange: (f:
         </Field>
         <Field label="Custom range">
           <DateRange from={filters.dateFrom} to={filters.dateTo}
-            onFrom={(d) => onChange({ ...filters, dateFrom: d })}
-            onTo={(d) => onChange({ ...filters, dateTo: d })} />
+            onFrom={(d) => onChange({ ...filters, dateFrom: d ? startOfDay(d) : undefined })}
+            onTo={(d) => onChange({ ...filters, dateTo: d ? endOfDay(d) : undefined })} />
         </Field>
         {active && (
           <Button variant="ghost" size="sm" className="w-full"

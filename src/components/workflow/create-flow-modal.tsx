@@ -273,11 +273,27 @@ export function CreateFlowModal({ open, onOpenChange, onCreated, targetUserId, t
       return toast.error("No leads match these filters");
     }
 
-    // Replace existing flow for today
+    // Build filter_meta for display on history cards
+    const filterMeta = {
+      rows: enabled.map((c) => {
+        const st = statuses.find((s) => s.id === c.statusId);
+        const lbls = labels.filter((l) => c.labelIds.includes(l.id));
+        return {
+          statusId: c.statusId,
+          statusName: c.statusId === FOLLOWUP_KEY ? "Follow-up (any open)" : (st?.name ?? "Unknown"),
+          statusColor: c.statusId === FOLLOWUP_KEY ? "#6366f1" : (st?.color ?? "#6366f1"),
+          labelNames: lbls.map((l) => l.name),
+          labelColors: lbls.map((l) => l.color),
+          fromDate: c.fromDate,
+          toDate: c.toDate,
+          attempts: c.attempts,
+        };
+      }),
+    };
+
     const workDate = format(new Date(), "yyyy-MM-dd");
     const flowName = `Workflow — ${format(new Date(), "MMM d, yyyy")}`;
-    await supabase.from("calling_flows").delete().eq("user_id", ownerId).eq("work_date", workDate);
-    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: ownerId, work_date: workDate, status: "active", name: flowName }).select("id").single();
+    const { data: flow, error } = await supabase.from("calling_flows").insert({ user_id: ownerId, work_date: workDate, status: "active", name: flowName, filter_meta: filterMeta }).select("id").single();
     if (error || !flow) { setBusy(false); return toast.error(error?.message ?? "Failed"); }
 
     const rows = queue.map((q) => ({ flow_id: flow.id, ...q }));

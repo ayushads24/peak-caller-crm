@@ -56,9 +56,11 @@ public class PhoneCallerPlugin extends Plugin {
         try {
             Intent intent = new Intent(Intent.ACTION_CALL);
             intent.setData(Uri.parse("tel:" + phone));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(intent);
+            getActivity().startActivity(intent);
             pluginCall.resolve(new JSObject().put("method", "direct"));
+        } catch (SecurityException e) {
+            openDialer(phone);
+            pluginCall.resolve(new JSObject().put("method", "dialer"));
         } catch (Exception e) {
             openDialer(phone);
             pluginCall.resolve(new JSObject().put("method", "dialer"));
@@ -68,7 +70,6 @@ public class PhoneCallerPlugin extends Plugin {
     private void openDialer(String phone) {
         Intent intent = new Intent(Intent.ACTION_DIAL);
         intent.setData(Uri.parse("tel:" + phone));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(intent);
+        getActivity().startActivity(intent);
     }
 }

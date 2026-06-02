@@ -181,7 +181,7 @@ function Page() {
       if (min !== null && (l.sales_value ?? 0) < min) return false;
       if (max !== null && (l.sales_value ?? 0) > max) return false;
       if (filters.dateFrom && new Date(l.created_at) < filters.dateFrom) return false;
-      if (filters.dateTo && new Date(l.created_at).getTime() > filters.dateTo.getTime() + 86400000) return false;
+      if (filters.dateTo && new Date(l.created_at) > filters.dateTo) return false;
       if (filters.followFrom || filters.followTo) {
         const fu = followups.get(l.id);
         if (!fu) return false;

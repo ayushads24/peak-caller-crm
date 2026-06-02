@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIncomingCallSetup } from "@/hooks/use-incoming-call";
 
 function NotFoundComponent() {
   return (
@@ -133,10 +134,16 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSync />
+      <IncomingCallSetup />
       <Outlet />
       <Toaster richColors closeButton position="top-right" />
     </QueryClientProvider>
   );
+}
+
+function IncomingCallSetup() {
+  useIncomingCallSetup();
+  return null;
 }
 
 function AuthSync() {

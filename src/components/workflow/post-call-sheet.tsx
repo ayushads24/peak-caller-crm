@@ -8,15 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search, UserCheck } from "lucide-react";
+import { MessageSquare, ListTodo, PhoneOff, PhoneCall, Loader2, Tag, MessageCircle, Plus, X, Search, UserCheck, ChevronDown, ChevronUp, Phone, Clock } from "lucide-react";
 import { cn, whatsappUrl } from "@/lib/utils";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { useAndroidBack } from "@/hooks/use-android-back";
+import { format } from "date-fns";
 
 interface Status { id: string; name: string; color: string; }
 interface LabelRow { id: string; name: string; color: string; }
 interface ProfileLite { id: string; full_name: string | null; email: string | null; }
 type CallStatus = "connected" | "not_connected" | "voicemail" | "busy" | "wrong_number";
+interface NoteRow { id: string; content: string; created_at: string; creator_name: string | null; }
+interface TaskRow { id: string; title: string; due_date: string | null; status: string; }
 
 function avatar(p: ProfileLite) {
   return (p.full_name?.trim() || p.email || "?")[0].toUpperCase();
@@ -37,7 +40,8 @@ export function PostCallSheet({
   const { user } = useAuth();
   const appSettings = useAppSettings();
   useAndroidBack(open, () => onOpenChange(false));
-  const [callStatus, setCallStatus] = useState<CallStatus>("connected");
+
+  const [callStatus, setCallStatus] = useState<CallStatus>("not_connected");
   const [leadStatusId, setLeadStatusId] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState<string>("");
   const [selectedLabels, setSelectedLabels] = useState<LabelRow[]>([]);
@@ -52,9 +56,16 @@ export function PostCallSheet({
   const [busy, setBusy] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Previous notes & tasks
+  const [prevNotes, setPrevNotes] = useState<NoteRow[]>([]);
+  const [prevTasks, setPrevTasks] = useState<TaskRow[]>([]);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const [tasksOpen, setTasksOpen] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   useEffect(() => {
     if (!open || !lead) return;
-    setCallStatus("connected");
+    setCallStatus("not_connected");
     setLeadStatusId(lead.status_id);
     setAssignTo(lead.assigned_to ?? "");
     setTaskAssignTo("");
@@ -62,6 +73,43 @@ export function PostCallSheet({
     setLabelSearch("");
     setNote(""); setTaskTitle(""); setTaskDue("");
     setSeconds(45); setExpired(false);
+
+    // Fetch previous notes + tasks
+    setLoadingHistory(true);
+    Promise.all([
+      supabase
+        .from("notes")
+        .select("id, content, created_at, created_by")
+        .eq("lead_id", lead.id)
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("tasks")
+        .select("id, title, due_date, status")
+        .eq("lead_id", lead.id)
+        .eq("status", "pending")
+        .order("due_date", { ascending: true })
+        .limit(5),
+    ]).then(async ([notesRes, tasksRes]) => {
+      const notes = (notesRes.data ?? []) as { id: string; content: string; created_at: string; created_by: string | null }[];
+
+      // Resolve creator names
+      const creatorIds = [...new Set(notes.map((n) => n.created_by).filter(Boolean))] as string[];
+      let nameMap = new Map<string, string>();
+      if (creatorIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
+        nameMap = new Map((profs ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name ?? ""]));
+      }
+
+      setPrevNotes(notes.map((n) => ({
+        id: n.id,
+        content: n.content,
+        created_at: n.created_at,
+        creator_name: n.created_by ? (nameMap.get(n.created_by) ?? null) : null,
+      })));
+      setPrevTasks((tasksRes.data ?? []) as TaskRow[]);
+      setLoadingHistory(false);
+    });
   }, [open, lead]);
 
   useEffect(() => {
@@ -96,7 +144,6 @@ export function PostCallSheet({
       lead_id: lead.id, user_id: user.id, status: callStatus, duration_seconds: duration, notes: note || null,
     });
 
-    // Update lead: status + assignment
     const leadUpdate: Record<string, unknown> = {};
     if (leadStatusId && leadStatusId !== lead.status_id) {
       leadUpdate.status_id = leadStatusId;
@@ -150,10 +197,18 @@ export function PostCallSheet({
     <Dialog open={open} onOpenChange={(v) => { if (!v) void commit(false); else onOpenChange(v); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
 
-        {/* Header */}
+        {/* Header — name + phone + timer */}
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="font-display flex items-center justify-between gap-2">
-            <span className="truncate text-base">{lead.client_name}</span>
+            <div className="min-w-0">
+              <div className="truncate text-base font-semibold">{lead.client_name}</div>
+              {lead.phone && (
+                <div className="flex items-center gap-1 text-sm font-normal text-muted-foreground mt-0.5">
+                  <Phone className="size-3" />
+                  {lead.phone}
+                </div>
+              )}
+            </div>
             <span className={cn("font-mono text-sm px-2.5 py-0.5 rounded-md shrink-0", timerColor)}>{seconds}s</span>
           </DialogTitle>
         </DialogHeader>
@@ -281,6 +336,89 @@ export function PostCallSheet({
                   </PopoverContent>
                 </Popover>
               </div>
+            </div>
+          )}
+
+          {/* Previous Notes */}
+          {(loadingHistory || prevNotes.length > 0) && (
+            <div className="rounded-lg border bg-muted/30 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setNotesOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="size-3" />
+                  Previous Notes
+                  {prevNotes.length > 0 && (
+                    <span className="bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-semibold">{prevNotes.length}</span>
+                  )}
+                </span>
+                {notesOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              </button>
+              {notesOpen && (
+                <div className="border-t divide-y">
+                  {loadingHistory ? (
+                    <div className="flex items-center justify-center py-3">
+                      <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : prevNotes.map((n) => (
+                    <div key={n.id} className="px-3 py-2">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          {format(new Date(n.created_at), "d MMM yyyy")}
+                        </span>
+                        {n.creator_name && (
+                          <span className="text-[10px] font-medium text-foreground/70">{n.creator_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-foreground/80 leading-relaxed line-clamp-2">{n.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Previous Tasks */}
+          {(loadingHistory || prevTasks.length > 0) && (
+            <div className="rounded-lg border bg-muted/30 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setTasksOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <ListTodo className="size-3" />
+                  Previous Tasks
+                  {prevTasks.length > 0 && (
+                    <span className="bg-amber-500/15 text-amber-600 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">{prevTasks.length}</span>
+                  )}
+                </span>
+                {tasksOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              </button>
+              {tasksOpen && (
+                <div className="border-t divide-y">
+                  {loadingHistory ? (
+                    <div className="flex items-center justify-center py-3">
+                      <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : prevTasks.map((t) => (
+                    <div key={t.id} className="px-3 py-2 flex items-center gap-2">
+                      <div className="size-1.5 rounded-full bg-amber-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground/80 truncate">{t.title}</p>
+                        {t.due_date && (
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                            <Clock className="size-2.5" />
+                            Due {format(new Date(t.due_date), "d MMM, h:mm a")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

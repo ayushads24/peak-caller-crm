@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Call to Grow CRM</string>
+    <string name="title_activity_main">Call to Grow CRM</string>
+    <string name="package_name">com.callgrow.crm</string>
+    <string name="custom_url_scheme">com.callgrow.crm</string>
+</resources>
