@@ -7,9 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 export const Route = createFileRoute("/_authenticated/settings")({ component: Page });
 
@@ -19,17 +34,83 @@ interface LabelRow { id: string; name: string; color: string; }
 function Page() {
   const { user, roles } = useAuth();
   const canManage = isAdminOrManager(roles);
-  const [statuses, setStatuses] = useState<Status[]>([]);
+  const [savedStatuses, setSavedStatuses] = useState<Status[]>([]);
+  const [draft, setDraft] = useState<Status[]>([]);
+  const [modifiedIds, setModifiedIds] = useState<Set<string>>(new Set());
+  const [orderChanged, setOrderChanged] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [labels, setLabels] = useState<LabelRow[]>([]);
 
+  const isDirty = modifiedIds.size > 0 || orderChanged;
+
   useEffect(() => { void load(); }, []);
+
   async function load() {
     const [s, l] = await Promise.all([
       supabase.from("statuses").select("*").order("sort_order"),
       supabase.from("labels").select("*").order("name"),
     ]);
-    setStatuses((s.data ?? []) as Status[]);
+    const loaded = (s.data ?? []) as Status[];
+    setSavedStatuses(loaded);
+    setDraft(loaded);
+    setModifiedIds(new Set());
+    setOrderChanged(false);
     setLabels((l.data ?? []) as LabelRow[]);
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDraft((prev) => {
+      const oldIdx = prev.findIndex((s) => s.id === active.id);
+      const newIdx = prev.findIndex((s) => s.id === over.id);
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+    setOrderChanged(true);
+  }
+
+  function handleFieldChange(id: string, patch: Partial<Status>) {
+    setDraft((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setModifiedIds((prev) => new Set(prev).add(id));
+  }
+
+  async function saveAll() {
+    setSaving(true);
+    const updates = draft.map((s, i) =>
+      supabase.from("statuses").update({
+        name: s.name,
+        color: s.color,
+        is_sales: s.is_sales,
+        is_lost: s.is_lost,
+        sort_order: i + 1,
+      }).eq("id", s.id)
+    );
+    const results = await Promise.all(updates);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast.error(failed.error.message);
+    } else {
+      toast.success("Changes saved!");
+      await load();
+    }
+    setSaving(false);
+  }
+
+  function cancelChanges() {
+    setDraft(savedStatuses);
+    setModifiedIds(new Set());
+    setOrderChanged(false);
+  }
+
+  async function deleteStatus(s: Status) {
+    if (!confirm(`Delete status "${s.name}"?`)) return;
+    const { error } = await supabase.from("statuses").delete().eq("id", s.id);
+    if (error) toast.error(error.message); else load();
   }
 
   return (
@@ -42,11 +123,50 @@ function Page() {
 
         <TabsContent value="statuses" className="mt-4">
           <Card className="p-4 sm:p-6 shadow-card">
-            {canManage && <NewStatus onCreated={load} nextOrder={(statuses.at(-1)?.sort_order ?? 0) + 1} />}
+            {canManage && (
+              <NewStatus
+                onCreated={load}
+                nextOrder={(savedStatuses.at(-1)?.sort_order ?? 0) + 1}
+              />
+            )}
+
+            {canManage && isDirty && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-2.5">
+                <span className="text-sm text-amber-700 dark:text-amber-400 flex-1">
+                  {orderChanged && modifiedIds.size > 0
+                    ? "Order and field changes unsaved"
+                    : orderChanged
+                    ? "Order changed — save to apply everywhere"
+                    : `${modifiedIds.size} status${modifiedIds.size > 1 ? "es" : ""} edited — unsaved`}
+                </span>
+                <Button variant="outline" size="sm" onClick={cancelChanges} className="text-xs">Cancel</Button>
+                <Button size="sm" onClick={saveAll} disabled={saving} className="bg-gradient-primary text-xs gap-1.5">
+                  <Save className="size-3.5" />
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            )}
+
             <div className="mt-4 space-y-2">
-              {statuses.map((s) => (
-                <StatusRow key={s.id} status={s} canManage={canManage} onChanged={load} />
-              ))}
+              {canManage ? (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={draft.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                    {draft.map((s) => (
+                      <SortableStatusRow
+                        key={s.id}
+                        status={s}
+                        isModified={modifiedIds.has(s.id)}
+                        onFieldChange={(patch) => handleFieldChange(s.id, patch)}
+                        onDelete={() => deleteStatus(s)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                draft.map((s) => (
+                  <StatusRow key={s.id} status={s} isModified={false} onFieldChange={() => {}} onDelete={() => {}} canManage={false} />
+                ))
+              )}
             </div>
           </Card>
         </TabsContent>
@@ -74,26 +194,73 @@ function Page() {
   );
 }
 
-function StatusRow({ status, canManage, onChanged }: { status: Status; canManage: boolean; onChanged: () => void }) {
-  async function update(patch: Partial<Status>) {
-    const { error } = await supabase.from("statuses").update(patch).eq("id", status.id);
-    if (error) toast.error(error.message); else onChanged();
-  }
-  async function del() {
-    if (!confirm(`Delete status "${status.name}"?`)) return;
-    const { error } = await supabase.from("statuses").delete().eq("id", status.id);
-    if (error) toast.error(error.message); else onChanged();
-  }
+function SortableStatusRow(props: {
+  status: Status;
+  isModified: boolean;
+  onFieldChange: (patch: Partial<Status>) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.status.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-lg border bg-card p-3">
+    <div ref={setNodeRef} style={style}>
+      <StatusRow {...props} canManage dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function StatusRow({ status, isModified, onFieldChange, onDelete, canManage, dragHandleProps }: {
+  status: Status;
+  isModified: boolean;
+  onFieldChange: (patch: Partial<Status>) => void;
+  onDelete: () => void;
+  canManage: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+}) {
+  return (
+    <div className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-lg border bg-card p-3 transition-colors ${isModified ? "border-amber-300 dark:border-amber-700" : ""}`}>
+      {canManage && (
+        <button
+          {...dragHandleProps}
+          className="hidden sm:flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none shrink-0"
+        >
+          <GripVertical className="size-4" />
+        </button>
+      )}
       <div className="flex items-center gap-2 flex-1">
-        <input type="color" disabled={!canManage} value={status.color} onChange={(e) => update({ color: e.target.value })} className="size-7 rounded cursor-pointer border" />
-        <Input disabled={!canManage} defaultValue={status.name} onBlur={(e) => e.target.value !== status.name && update({ name: e.target.value })} className="max-w-xs" />
+        <input
+          type="color"
+          disabled={!canManage}
+          value={status.color}
+          onChange={(e) => onFieldChange({ color: e.target.value })}
+          className="size-7 rounded cursor-pointer border"
+        />
+        <Input
+          disabled={!canManage}
+          value={status.name}
+          onChange={(e) => onFieldChange({ name: e.target.value })}
+          className="max-w-xs"
+        />
       </div>
       <div className="flex items-center gap-4 text-xs">
-        <label className="flex items-center gap-1.5"><Switch disabled={!canManage} checked={status.is_sales} onCheckedChange={(v) => update({ is_sales: v })} /> Sale</label>
-        <label className="flex items-center gap-1.5"><Switch disabled={!canManage} checked={status.is_lost} onCheckedChange={(v) => update({ is_lost: v })} /> Lost</label>
-        {canManage && <Button variant="ghost" size="icon" onClick={del} className="text-destructive"><Trash2 className="size-4" /></Button>}
+        <label className="flex items-center gap-1.5">
+          <Switch disabled={!canManage} checked={status.is_sales} onCheckedChange={(v) => onFieldChange({ is_sales: v })} />
+          Sale
+        </label>
+        <label className="flex items-center gap-1.5">
+          <Switch disabled={!canManage} checked={status.is_lost} onCheckedChange={(v) => onFieldChange({ is_lost: v })} />
+          Lost
+        </label>
+        {canManage && (
+          <Button variant="ghost" size="icon" onClick={onDelete} className="text-destructive">
+            <Trash2 className="size-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -111,7 +278,7 @@ function NewStatus({ onCreated, nextOrder }: { onCreated: () => void; nextOrder:
   return (
     <div className="flex gap-2">
       <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="size-10 rounded cursor-pointer border" />
-      <Input placeholder="New status name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Input placeholder="New status name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
       <Button onClick={add} className="bg-gradient-primary"><Plus className="size-4 mr-1" />Add</Button>
     </div>
   );
@@ -129,7 +296,7 @@ function NewLabel({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="flex gap-2">
       <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="size-10 rounded cursor-pointer border" />
-      <Input placeholder="New label name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Input placeholder="New label name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
       <Button onClick={add} className="bg-gradient-primary"><Plus className="size-4 mr-1" />Add</Button>
     </div>
   );

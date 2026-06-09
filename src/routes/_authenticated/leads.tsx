@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +33,9 @@ export const Route = createFileRoute("/_authenticated/leads")({
 });
 
 function Page() {
-  const { user } = useAuth();
-  const canDelete = true;
+  const { user, roles } = useAuth();
+  const canManage = isAdminOrManager(roles);
+  const canDelete = canManage;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
   const search = Route.useSearch();

@@ -214,7 +214,7 @@ function Page() {
       const leadIds = Array.from(new Set(its.map((i) => i.lead_id)));
       const [{ data: leads }, { data: sts }, { data: callRows }] = await Promise.all([
         supabase.from("leads").select("id, client_name, phone, status_id").in("id", leadIds),
-        supabase.from("statuses").select("id, name, color"),
+        supabase.from("statuses").select("id, name, color").order("sort_order"),
         supabase.from("calls")
           .select("called_at, created_at, duration_seconds")
           .in("lead_id", leadIds)

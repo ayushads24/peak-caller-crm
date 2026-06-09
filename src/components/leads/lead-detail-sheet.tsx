@@ -485,6 +485,28 @@ export function LeadDetailSheet({
                 className="bg-muted cursor-default"
               />
             </Field>
+            <div className="lg:hidden">
+              <Field label="Assigned to">
+                <Select
+                  value={edit.assigned_to ?? "__unassigned"}
+                  onValueChange={(v) =>
+                    setEdit({ ...edit, assigned_to: v === "__unassigned" ? null : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Unassigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unassigned">Unassigned</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name || p.email || p.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
               </div>
             </Section>
 
@@ -655,10 +677,6 @@ export function LeadDetailSheet({
                   {status && <span className="size-2 rounded-full shrink-0" style={{ background: status.color }} />}
                   {status?.name || "—"}
                 </span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
-                <span className="text-muted-foreground text-xs">Assigned To</span>
-                <span className="font-medium text-xs">{assignedProfile?.full_name || assignedProfile?.email || "Unassigned"}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm">
                 <span className="text-muted-foreground text-xs">Customer ID</span>

@@ -140,7 +140,7 @@ function Page() {
       leadIds.length
         ? supabase.from("leads").select("id, client_name, phone, status_id, doubletick_contact_id").in("id", leadIds)
         : Promise.resolve({ data: [] as LeadLite[] }),
-      supabase.from("statuses").select("id, name, color"),
+      supabase.from("statuses").select("id, name, color").order("sort_order"),
       userIds.length
         ? (supabase as any).from("profiles_directory").select("id, full_name, email").in("id", userIds)
         : Promise.resolve({ data: [] as ProfileLite[] }),
