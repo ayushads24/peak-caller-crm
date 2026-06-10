@@ -39,6 +39,8 @@ public class IncomingCallService extends Service {
     private View overlayView;
     private Handler mainHandler;
     private TelephonyManager telephonyManager;
+    private int prevCallState = TelephonyManager.CALL_STATE_IDLE;
+    private boolean wasOutgoingCall = false;
 
     @SuppressWarnings("deprecation")
     private PhoneStateListener phoneStateListener;
@@ -65,13 +67,41 @@ public class IncomingCallService extends Service {
             @Override
             public void onCallStateChanged(int state, String phoneNumber) {
                 if (state == TelephonyManager.CALL_STATE_RINGING) {
+                    wasOutgoingCall = false;
                     showOverlay(phoneNumber);
+                } else if (state == TelephonyManager.CALL_STATE_OFFHOOK) {
+                    dismissOverlay();
+                    if (prevCallState == TelephonyManager.CALL_STATE_IDLE) {
+                        // Outgoing call placed by our app — bring app to front
+                        wasOutgoingCall = true;
+                        bringAppToFront(600);
+                    }
                 } else if (state == TelephonyManager.CALL_STATE_IDLE) {
                     dismissOverlay();
+                    if (wasOutgoingCall) {
+                        // Our outgoing call ended — return to app for post-call sheet
+                        bringAppToFront(300);
+                    }
+                    wasOutgoingCall = false;
                 }
+                prevCallState = state;
             }
         };
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+    }
+
+    private void bringAppToFront(long delayMs) {
+        mainHandler.postDelayed(() -> {
+            try {
+                Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(launch);
+                }
+            } catch (Exception ignored) {}
+        }, delayMs);
     }
 
     private void showOverlay(String phone) {

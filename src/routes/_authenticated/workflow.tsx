@@ -45,7 +45,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { whatsappUrl } from "@/lib/utils";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { makeCall } from "@/hooks/use-phone-caller";
+import { makeCall, onCallEnded } from "@/hooks/use-phone-caller";
+import { Capacitor } from "@capacitor/core";
 
 export const Route = createFileRoute("/_authenticated/workflow")({ component: Page });
 
@@ -121,9 +122,10 @@ function Page() {
   const [now, setNow] = useState(() => new Date());
   const [todayCalls, setTodayCalls] = useState(0);
   const [todayConnected, setTodayConnected] = useState(0);
-  const lastAutoCalledItemId = useRef<string | null>(null);
+  const lastAutoCalledKey = useRef<string | null>(null);
   const lastRetryToastRef = useRef<string | null>(null);
   const flowStartedAt = useRef<number>(Date.now());
+  const callEndedHandlerRef = useRef<(answered: boolean, duration: number) => void>(() => {});
 
   useEffect(() => {
     if (user) { void load(); void loadTodayStats(); }
@@ -373,7 +375,11 @@ function Page() {
         .eq("id", current.id);
     }
     setPostLead(currentLead);
-    setTimeout(() => setPostOpen(true), 300);
+    // On native, post-call sheet opens only when call ends (via callEnded event)
+    // On web, open immediately as fallback
+    if (!Capacitor.isNativePlatform()) {
+      setTimeout(() => setPostOpen(true), 300);
+    }
   }
 
   async function advance(notConnected = false, newLeadStatusId?: string | null) {
@@ -458,17 +464,44 @@ function Page() {
       .eq("id", activeBreak.id);
   }
 
+  // Keep callEnded handler up-to-date with latest state (avoids stale closures)
+  useEffect(() => {
+    callEndedHandlerRef.current = (answered: boolean, duration: number) => {
+      if (answered) {
+        // Call was picked up — open post-call sheet
+        setPostOpen(true);
+      } else if (autoMode === "running" && !activeBreak && current && user) {
+        // Not answered — log attempt and auto-advance to next lead
+        void supabase.from("calls").insert({
+          lead_id: current.lead_id,
+          user_id: user.id,
+          status: "not_connected",
+          duration_seconds: duration,
+          notes: null,
+        }).then(() => advance(true));
+      }
+    };
+  }, [autoMode, activeBreak, current, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Set up callEnded listener once (routes through ref to always use fresh handler)
+  useEffect(() => {
+    return onCallEnded(({ answered, duration }) => {
+      callEndedHandlerRef.current(answered, duration);
+    });
+  }, []);
+
   // Auto-mode: when current lead changes and auto is running, trigger call
   useEffect(() => {
     if (autoMode !== "running" || activeBreak || postOpen || !current || !currentLead) return;
-    if (lastAutoCalledItemId.current === current.id) return;
-    lastAutoCalledItemId.current = current.id;
+    const callKey = `${current.id}-${current.attempts_done}`;
+    if (lastAutoCalledKey.current === callKey) return;
+    lastAutoCalledKey.current = callKey;
     const t = setTimeout(() => {
       void startCall();
     }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoMode, activeBreak, postOpen, current?.id]);
+  }, [autoMode, activeBreak, postOpen, current?.id, current?.attempts_done]);
 
   function toggleAuto() {
     if (autoMode === "off") {
@@ -476,9 +509,12 @@ function Page() {
       setAutoMode("running");
       toast.success("Auto-calling started");
       // Directly trigger first call instead of relying on useEffect timing
-      if (current && currentLead && lastAutoCalledItemId.current !== current.id) {
-        lastAutoCalledItemId.current = current.id;
-        setTimeout(() => void startCall(), 500);
+      if (current && currentLead) {
+        const callKey = `${current.id}-${current.attempts_done}`;
+        if (lastAutoCalledKey.current !== callKey) {
+          lastAutoCalledKey.current = callKey;
+          setTimeout(() => void startCall(), 500);
+        }
       }
     } else if (autoMode === "running") {
       setAutoMode("paused");
@@ -487,15 +523,18 @@ function Page() {
       setAutoMode("running");
       toast.success("Auto-calling resumed");
       // Resume - trigger call if current lead hasn't been called yet
-      if (current && currentLead && lastAutoCalledItemId.current !== current.id) {
-        lastAutoCalledItemId.current = current.id;
-        setTimeout(() => void startCall(), 500);
+      if (current && currentLead) {
+        const callKey = `${current.id}-${current.attempts_done}`;
+        if (lastAutoCalledKey.current !== callKey) {
+          lastAutoCalledKey.current = callKey;
+          setTimeout(() => void startCall(), 500);
+        }
       }
     }
   }
   function endAuto() {
     setAutoMode("off");
-    lastAutoCalledItemId.current = null;
+    lastAutoCalledKey.current = null;
     toast.message("Auto-calling stopped");
   }
 
@@ -958,7 +997,6 @@ function Page() {
         durationStartedAt={callStartedAt}
         onComplete={(cs, newStatusId) => {
           setCallStartedAt(null);
-          lastAutoCalledItemId.current = null;
           void advance(cs === "not_connected", newStatusId);
         }}
       />
