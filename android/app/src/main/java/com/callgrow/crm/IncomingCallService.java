@@ -71,8 +71,8 @@ public class IncomingCallService extends Service {
                     showOverlay(phoneNumber);
                 } else if (state == TelephonyManager.CALL_STATE_OFFHOOK) {
                     dismissOverlay();
-                    if (prevCallState == TelephonyManager.CALL_STATE_IDLE) {
-                        // Outgoing call placed by our app — bring app to front
+                    if (prevCallState == TelephonyManager.CALL_STATE_IDLE && PhoneCallerPlugin.crmInitiatedCall) {
+                        // Only bring app to front if CRM placed this call (not manual dial)
                         wasOutgoingCall = true;
                         bringAppToFront(600);
                     }

@@ -28,6 +28,8 @@ import com.getcapacitor.annotation.PermissionCallback;
 )
 public class PhoneCallerPlugin extends Plugin {
 
+    public static volatile boolean crmInitiatedCall = false;
+
     private TelephonyManager telephonyManager;
     private PhoneStateListener callStateListener;
     private boolean trackingCall = false;
@@ -71,14 +73,17 @@ public class PhoneCallerPlugin extends Plugin {
             intent.setData(Uri.parse("tel:" + phone));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             callStartTime = System.currentTimeMillis();
+            crmInitiatedCall = true;
             getActivity().startActivity(intent);
             trackedPhone = phone;
             startCallMonitoring();
             pluginCall.resolve(new JSObject().put("method", "direct"));
         } catch (SecurityException e) {
+            crmInitiatedCall = false;
             openDialer(phone);
             pluginCall.resolve(new JSObject().put("method", "dialer"));
         } catch (Exception e) {
+            crmInitiatedCall = false;
             openDialer(phone);
             pluginCall.resolve(new JSObject().put("method", "dialer"));
         }
@@ -115,6 +120,7 @@ public class PhoneCallerPlugin extends Plugin {
     }
 
     private void checkAndFireCallResult(String phone) {
+        crmInitiatedCall = false;
         int duration = 0;
         try {
             Cursor cursor = getContext().getContentResolver().query(
