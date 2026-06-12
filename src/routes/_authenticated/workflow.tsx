@@ -157,7 +157,8 @@ function Page() {
 
         // Check if today's flow exists and has fresh category items
         const workDate = format(new Date(), "yyyy-MM-dd");
-        const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
+        const { data: rtFlows } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).order("created_at", { ascending: false });
+        const flow = rtFlows?.[0] ?? null;
         if (!flow) { void load(); return; }
 
         const { data: flowItems } = await supabase.from("calling_flow_items").select("id, lead_id, category, priority, status").eq("flow_id", flow.id);
@@ -215,12 +216,13 @@ function Page() {
     if (!user) return;
     setLoading(true);
     const workDate = format(new Date(), "yyyy-MM-dd");
-    const { data: flow } = await supabase
+    const { data: flows } = await supabase
       .from("calling_flows")
       .select("id, status")
       .eq("user_id", user.id)
       .eq("work_date", workDate)
-      .maybeSingle();
+      .order("created_at", { ascending: false });
+    const flow = flows?.[0] ?? null;
     if (!flow) {
       setFlowId(null);
       setItems([]);
@@ -344,6 +346,7 @@ function Page() {
       created_at: l.created_at,
       assigned_to: l.assigned_to ?? null,
       created_by: l.created_by ?? null,
+      doubletick_contact_id: l.doubletick_contact_id ?? null,
     });
     setDetailOpen(true);
   }

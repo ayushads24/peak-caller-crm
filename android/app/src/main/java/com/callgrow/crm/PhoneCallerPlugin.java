@@ -32,6 +32,7 @@ public class PhoneCallerPlugin extends Plugin {
     private PhoneStateListener callStateListener;
     private boolean trackingCall = false;
     private String trackedPhone = null;
+    private long callStartTime = 0;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @PluginMethod
@@ -69,6 +70,7 @@ public class PhoneCallerPlugin extends Plugin {
             Intent intent = new Intent(Intent.ACTION_CALL);
             intent.setData(Uri.parse("tel:" + phone));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            callStartTime = System.currentTimeMillis();
             getActivity().startActivity(intent);
             trackedPhone = phone;
             startCallMonitoring();
@@ -118,8 +120,8 @@ public class PhoneCallerPlugin extends Plugin {
             Cursor cursor = getContext().getContentResolver().query(
                 CallLog.Calls.CONTENT_URI,
                 new String[]{ CallLog.Calls.DURATION },
-                CallLog.Calls.TYPE + " = ?",
-                new String[]{ String.valueOf(CallLog.Calls.OUTGOING_TYPE) },
+                CallLog.Calls.TYPE + " = ? AND " + CallLog.Calls.DATE + " >= ?",
+                new String[]{ String.valueOf(CallLog.Calls.OUTGOING_TYPE), String.valueOf(callStartTime) },
                 CallLog.Calls.DATE + " DESC"
             );
             if (cursor != null) {
