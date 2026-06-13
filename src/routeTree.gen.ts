@@ -15,6 +15,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAssignLeadRouteImport } from './routes/api/assign-lead'
+import { Route as ApiAllLeadsRouteImport } from './routes/api/all-leads'
 import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticated/workflow'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedTeamWorkflowsRouteImport } from './routes/_authenticated/team-workflows'
@@ -58,6 +60,16 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAssignLeadRoute = ApiAssignLeadRouteImport.update({
+  id: '/api/assign-lead',
+  path: '/api/assign-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAllLeadsRoute = ApiAllLeadsRouteImport.update({
+  id: '/api/all-leads',
+  path: '/api/all-leads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedWorkflowRoute = AuthenticatedWorkflowRouteImport.update({
@@ -161,6 +173,8 @@ export interface FileRoutesByFullPath {
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/all-leads': typeof ApiAllLeadsRoute
+  '/api/assign-lead': typeof ApiAssignLeadRoute
   '/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
@@ -183,6 +197,8 @@ export interface FileRoutesByTo {
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/all-leads': typeof ApiAllLeadsRoute
+  '/api/assign-lead': typeof ApiAssignLeadRoute
   '/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
@@ -207,6 +223,8 @@ export interface FileRoutesById {
   '/_authenticated/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/all-leads': typeof ApiAllLeadsRoute
+  '/api/assign-lead': typeof ApiAssignLeadRoute
   '/_authenticated/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
@@ -231,6 +249,8 @@ export interface FileRouteTypes {
     | '/team-workflows'
     | '/users'
     | '/workflow'
+    | '/api/all-leads'
+    | '/api/assign-lead'
     | '/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
@@ -253,6 +273,8 @@ export interface FileRouteTypes {
     | '/team-workflows'
     | '/users'
     | '/workflow'
+    | '/api/all-leads'
+    | '/api/assign-lead'
     | '/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
@@ -276,6 +298,8 @@ export interface FileRouteTypes {
     | '/_authenticated/team-workflows'
     | '/_authenticated/users'
     | '/_authenticated/workflow'
+    | '/api/all-leads'
+    | '/api/assign-lead'
     | '/_authenticated/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
@@ -288,6 +312,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiAllLeadsRoute: typeof ApiAllLeadsRoute
+  ApiAssignLeadRoute: typeof ApiAssignLeadRoute
   ApiPublicWebhookDoubletickRoute: typeof ApiPublicWebhookDoubletickRoute
   ApiPublicWebhookFacebookRoute: typeof ApiPublicWebhookFacebookRoute
 }
@@ -334,6 +360,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/assign-lead': {
+      id: '/api/assign-lead'
+      path: '/api/assign-lead'
+      fullPath: '/api/assign-lead'
+      preLoaderRoute: typeof ApiAssignLeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/all-leads': {
+      id: '/api/all-leads'
+      path: '/api/all-leads'
+      fullPath: '/api/all-leads'
+      preLoaderRoute: typeof ApiAllLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/workflow': {
@@ -496,6 +536,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiAllLeadsRoute: ApiAllLeadsRoute,
+  ApiAssignLeadRoute: ApiAssignLeadRoute,
   ApiPublicWebhookDoubletickRoute: ApiPublicWebhookDoubletickRoute,
   ApiPublicWebhookFacebookRoute: ApiPublicWebhookFacebookRoute,
 }

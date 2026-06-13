@@ -79,7 +79,7 @@ function Page() {
 
   async function load() {
     const [l, s, lb, p, t, ll, tk, ac, ur] = await Promise.all([
-      supabase.from("leads").select("id, client_name, email, phone, sales_value, lead_source, status_id, created_at, assigned_to, created_by, doubletick_contact_id").order("created_at", { ascending: false }),
+      fetch("/api/all-leads").then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: [], error: e })),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color").order("name"),
       (supabase as any).from("profiles_directory").select("id, full_name, email, team_id").order("full_name"),

@@ -1,4 +1,4 @@
-const CACHE = 'ctg-pwa-v1';
+const CACHE = 'ctg-pwa-v3';
 const PRECACHE = ['/manifest.webmanifest', '/favicon.png', '/apple-touch-icon.png', '/pwa-192x192.png'];
 
 self.addEventListener('install', (e) => {
@@ -18,29 +18,11 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // Skip non-GET and API/auth requests
   if (e.request.method !== 'GET') return;
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) return;
 
-  // Cache-first for static assets (/assets/*)
-  if (url.pathname.startsWith('/assets/')) {
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        if (cached) return cached;
-        return fetch(e.request).then(res => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
-          }
-          return res;
-        });
-      })
-    );
-    return;
-  }
-
-  // Network-first for HTML pages (SSR)
+  // Network-first for everything — prevents stale JS chunks after new deployments
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).then(res => res).catch(() => caches.match(e.request))
   );
 });

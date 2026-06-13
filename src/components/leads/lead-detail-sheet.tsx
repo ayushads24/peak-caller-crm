@@ -131,6 +131,18 @@ export function LeadDetailSheet({
     setSaving(true);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const statusChanged = savedRef.current && edit.status_id !== savedRef.current.status_id;
+    const assignedToChanged = savedRef.current?.assigned_to !== edit.assigned_to;
+
+    // If assigned_to changed, update it first via API (bypasses RLS so any user can reassign)
+    if (assignedToChanged) {
+      const res = await fetch("/api/assign-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: edit.id, assignedTo: edit.assigned_to ?? null }),
+      });
+      if (!res.ok) { setSaving(false); return toast.error("Could not change assignee"); }
+    }
+
     const { error } = await supabase
       .from("leads")
       .update({
