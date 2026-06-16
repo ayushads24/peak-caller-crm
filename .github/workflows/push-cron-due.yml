@@ -1,0 +1,14 @@
+name: Due Task Push Notifications
+
+on:
+  schedule:
+    - cron: '* * * * *'   # every minute (GitHub enforces ~5min minimum on free)
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger due task push
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            https://tele-calling-crm-6z4f.vercel.app/api/push-cron-due
