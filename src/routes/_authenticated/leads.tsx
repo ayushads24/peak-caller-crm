@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -49,6 +49,8 @@ function Page() {
   const [followups, setFollowups] = useState<Map<string, Date>>(new Map());
   const [movements, setMovements] = useState<MovementEvent[]>([]);
   const [filters, setFilters] = useState<LeadFilters>(EMPTY_FILTERS);
+  const currentDateRef = useRef<{ from?: Date; to?: Date }>({});
+  const isFirstDateRender = useRef(true);
 
   // Hydrate filters from URL once on mount (e.g. when navigated from Dashboard → Status Movement card)
   useEffect(() => {
@@ -77,9 +79,29 @@ function Page() {
     return () => { void supabase.removeChannel(ch); };
   }, []);
 
+  // Re-fetch leads (only) when date filter changes — passes filter to server so DB does the work
+  useEffect(() => {
+    if (isFirstDateRender.current) { isFirstDateRender.current = false; return; }
+    void loadLeadsOnly(filters.dateFrom, filters.dateTo);
+  }, [filters.dateFrom, filters.dateTo]);
+
+  function buildLeadsUrl(dateFrom?: Date, dateTo?: Date) {
+    const p = new URLSearchParams();
+    if (dateFrom) p.set("from", dateFrom.toISOString());
+    if (dateTo) p.set("to", dateTo.toISOString());
+    return `/api/all-leads${p.size ? "?" + p.toString() : ""}`;
+  }
+
+  async function loadLeadsOnly(dateFrom?: Date, dateTo?: Date) {
+    currentDateRef.current = { from: dateFrom, to: dateTo };
+    const data = await fetch(buildLeadsUrl(dateFrom, dateTo)).then(r => r.json()).catch(() => []);
+    setLeads(data as LeadRow[]);
+  }
+
   async function load() {
+    const url = buildLeadsUrl(currentDateRef.current.from, currentDateRef.current.to);
     const [l, s, lb, p, t, ll, tk, ac, ur] = await Promise.all([
-      fetch("/api/all-leads").then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: [], error: e })),
+      fetch(url).then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: [], error: e })),
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color").order("name"),
       (supabase as any).from("profiles_directory").select("id, full_name, email, team_id").order("full_name"),
