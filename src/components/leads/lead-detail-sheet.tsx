@@ -37,6 +37,7 @@ import {
   ChevronRight,
   ChevronLeft,
   MoreHorizontal,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -125,6 +126,8 @@ export function LeadDetailSheet({
       created_at: string;
     }[]
   >([]);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editDueDate, setEditDueDate] = useState("");
   const [activities, setActivities] = useState<
     { id: string; description: string; created_at: string; type: string; author?: string | null }[]
   >([]);
@@ -289,6 +292,18 @@ export function LeadDetailSheet({
       })
       .eq("id", id);
     if (error) return toast.error(error.message);
+    void loadRelated(lead!.id);
+  }
+
+  async function updateTaskDueDate(id: string) {
+    const res = await fetch("/api/update-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, due_date: editDueDate ? new Date(editDueDate).toISOString() : null }),
+    });
+    if (!res.ok) return toast.error(await res.text());
+    toast.success("Due date updated");
+    setEditingTaskId(null);
     void loadRelated(lead!.id);
   }
 
@@ -801,25 +816,42 @@ export function LeadDetailSheet({
                     {t.status === "completed" && <Check className="size-3" />}
                   </button>
                   <div className="flex-1 min-w-0">
-                    <p
-                      className={
-                        t.status === "completed" ? "line-through text-muted-foreground" : ""
-                      }
-                    >
+                    <p className={t.status === "completed" ? "line-through text-muted-foreground" : ""}>
                       {t.title}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {t.due_date && <>Due {new Date(t.due_date).toLocaleString()}</>}
-                      {t.assigned_to && (
-                        <>
-                          {" "}
-                          · For{" "}
-                          {profiles.find((p) => p.id === t.assigned_to)?.full_name ??
-                            profiles.find((p) => p.id === t.assigned_to)?.email ??
-                            "teammate"}
-                        </>
-                      )}
-                    </p>
+                    {editingTaskId === t.id ? (
+                      <div className="flex items-center gap-1 mt-1">
+                        <input
+                          type="datetime-local"
+                          value={editDueDate}
+                          onChange={(e) => setEditDueDate(e.target.value)}
+                          className="text-[11px] border rounded px-1.5 py-0.5 bg-background"
+                        />
+                        <button onClick={() => updateTaskDueDate(t.id)} className="text-emerald-600 hover:text-emerald-700">
+                          <Check className="size-3.5" />
+                        </button>
+                        <button onClick={() => setEditingTaskId(null)} className="text-muted-foreground hover:text-foreground">
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                        {t.due_date && (
+                          <>
+                            Due {format(new Date(t.due_date), "d MMM yyyy, h:mm a")}
+                          </>
+                        )}
+                        <button
+                          onClick={() => { setEditingTaskId(t.id); setEditDueDate(t.due_date ? new Date(t.due_date).toISOString().slice(0, 16) : ""); }}
+                          className="text-muted-foreground hover:text-primary ml-0.5"
+                        >
+                          <Pencil className="size-2.5" />
+                        </button>
+                        {t.assigned_to && (
+                          <> · For {profiles.find((p) => p.id === t.assigned_to)?.full_name ?? profiles.find((p) => p.id === t.assigned_to)?.email ?? "teammate"}</>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
