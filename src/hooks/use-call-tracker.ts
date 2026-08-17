@@ -60,18 +60,47 @@ async function processPendingCall() {
     await supabase.from("activities").insert({
       lead_id: pending.leadId,
       description,
-      type: "call",
+      type: "call_logged" as const,
       created_by: pending.userId,
     });
 
-    await supabase.from("calls").insert({
-      lead_id: pending.leadId,
-      user_id: pending.userId,
-      status: result.connected && duration > 0 ? "connected" : "not_connected",
-      duration_seconds: duration,
+    await fetch("/api/log-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_id: pending.leadId,
+        user_id: pending.userId,
+        status: result.connected && duration > 0 ? "connected" : "not_connected",
+        duration_seconds: duration,
+      }),
     });
   } catch {
-    // Native plugin unavailable (web/desktop) — skip silently
+    // Native plugin unavailable (web/desktop) — auto-log based on duration
+    const duration = Math.round((Date.now() - pending.startTime) / 1000);
+    if (duration < 3) return; // user came back too fast, probably didn't dial
+    const connected = duration >= 10;
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    const description = connected
+      ? `Called ${pending.leadName} — ${durStr}`
+      : `Called ${pending.leadName} — not connected`;
+    await supabase.from("activities").insert({
+      lead_id: pending.leadId,
+      description,
+      type: "call_logged" as const,
+      created_by: pending.userId,
+    });
+    await fetch("/api/log-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_id: pending.leadId,
+        user_id: pending.userId,
+        status: connected ? "connected" : "not_connected",
+        duration_seconds: duration,
+      }),
+    });
   }
 }
 

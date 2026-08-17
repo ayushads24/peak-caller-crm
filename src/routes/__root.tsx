@@ -41,6 +41,25 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
+  // Stale chunk after a new deploy — old filenames are 404 on Vercel CDN.
+  // Auto-reload to pick up the new build instead of showing a dead screen.
+  const isChunkError =
+    /Failed to fetch dynamically imported module|Importing a module script failed|dynamically imported module/i.test(
+      error.message ?? ""
+    );
+
+  useEffect(() => {
+    if (isChunkError) window.location.reload();
+  }, [isChunkError]);
+
+  if (isChunkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <p className="text-sm text-muted-foreground">Updating app, please wait…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -130,6 +149,17 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    function onUnhandledRejection(e: PromiseRejectionEvent) {
+      const msg = (e.reason as Error)?.message ?? "";
+      if (/Failed to fetch dynamically imported module|dynamically imported module/i.test(msg)) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    return () => window.removeEventListener("unhandledrejection", onUnhandledRejection);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

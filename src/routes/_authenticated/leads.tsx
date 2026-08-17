@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -12,10 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog, MessageCircle, AlertTriangle } from "lucide-react";
+import { Plus, Download, Upload, Phone, Mail, ChevronLeft, ChevronRight, Tag, CircleDot, X, Trash2, Copy, UserCog, MessageCircle, AlertTriangle, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import { format } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { LeadDetailSheet, type LeadRow, type StatusRow, type LabelRow } from "@/components/leads/lead-detail-sheet";
 import { LeadsFilterBar, EMPTY_FILTERS, type LeadFilters, type ProfileLite } from "@/components/leads/leads-filter-bar";
 import type { MovementEvent } from "@/components/leads/leads-analytics-strip";
@@ -39,111 +40,137 @@ function Page() {
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
   const search = Route.useSearch();
-  const [leads, setLeads] = useState<LeadRow[] | null>(null);
-  const [statuses, setStatuses] = useState<StatusRow[]>([]);
-  const [labels, setLabels] = useState<LabelRow[]>([]);
-  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
-  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
-  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
-  const [leadLabels, setLeadLabels] = useState<Map<string, Set<string>>>(new Map());
-  const [followups, setFollowups] = useState<Map<string, Date>>(new Map());
-  const [movements, setMovements] = useState<MovementEvent[]>([]);
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<LeadFilters>(EMPTY_FILTERS);
-  const currentDateRef = useRef<{ from?: Date; to?: Date }>({});
-  const isFirstDateRender = useRef(true);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Static data: shared cache across all pages, stale after 5 minutes ──
+  const { data: statuses = [] } = useQuery({
+    queryKey: ["statuses"],
+    queryFn: async () => { const { data } = await supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"); return (data ?? []) as StatusRow[]; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: labels = [] } = useQuery({
+    queryKey: ["labels"],
+    queryFn: async () => { const { data } = await supabase.from("labels").select("id, name, color").order("name"); return (data ?? []) as LabelRow[]; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["profiles_directory"],
+    queryFn: async () => { const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email, team_id").order("full_name"); return (data ?? []) as ProfileLite[]; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: async () => { const { data } = await supabase.from("teams").select("id, name").order("name"); return (data ?? []) as { id: string; name: string }[]; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: adminRoles = [] } = useQuery({
+    queryKey: ["admin_roles"],
+    queryFn: async () => { const { data } = await supabase.from("user_roles").select("user_id, role").in("role", ["admin", "manager"]); return (data ?? []) as { user_id: string }[]; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const adminIds = useMemo(() => new Set(adminRoles.map(r => r.user_id)), [adminRoles]);
+
+  // ── Dynamic data: 30s staleTime — navigating back within 30s = instant, no refetch ──
+  // Guard against Invalid Date (e.g. when from=my-tasks ends up in URL as a date param)
+  const leadsFrom = filters.dateFrom && !isNaN(filters.dateFrom.getTime()) ? filters.dateFrom.toISOString() : undefined;
+  const leadsTo = filters.dateTo && !isNaN(filters.dateTo.getTime()) ? filters.dateTo.toISOString() : undefined;
+  const { data: allLeadsData } = useQuery({
+    queryKey: ["leads", leadsFrom, leadsTo],
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (leadsFrom) p.set("from", leadsFrom);
+      if (leadsTo) p.set("to", leadsTo);
+      return fetch(`/api/all-leads${p.size ? "?" + p.toString() : ""}`).then(r => r.json()) as Promise<{
+        leads: LeadRow[];
+        leadLabels: { lead_id: string; label_id: string }[];
+        pendingTasks: { lead_id: string; due_date: string | null }[];
+      }>;
+    },
+    staleTime: 30 * 1000,
+    placeholderData: (prev) => prev,
+  });
+  const leads: LeadRow[] | null = allLeadsData?.leads ?? null;
+
+  const leadLabels = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    (allLeadsData?.leadLabels ?? []).forEach(r => {
+      if (!map.has(r.lead_id)) map.set(r.lead_id, new Set());
+      map.get(r.lead_id)!.add(r.label_id);
+    });
+    return map;
+  }, [allLeadsData?.leadLabels]);
+
+  const followups = useMemo(() => {
+    const map = new Map<string, Date | null>();
+    (allLeadsData?.pendingTasks ?? []).forEach(r => {
+      if (!r.due_date) {
+        // Task exists but no due date — mark with null so card still shows indicator
+        if (!map.has(r.lead_id)) map.set(r.lead_id, null);
+        return;
+      }
+      const d = new Date(r.due_date);
+      const existing = map.get(r.lead_id);
+      if (existing === undefined || existing === null || d < existing) map.set(r.lead_id, d);
+    });
+    return map;
+  }, [allLeadsData?.pendingTasks]);
+
+  // ── Movement history: only fetched when movement filter is active ──
+  const hasMovementFilter = filters.moveFrom !== "any" || filters.moveTo !== "any" || filters.moveBy !== "any" || !!filters.moveDateFrom || !!filters.moveDateTo;
+  const { data: rawMovements = [] } = useQuery({
+    queryKey: ["movements"],
+    queryFn: async () => { const { data } = await supabase.from("activities").select("lead_id, created_by, created_at, metadata").eq("type", "status_changed").order("created_at", { ascending: false }).limit(2000); return (data ?? []) as { lead_id: string; created_by: string | null; created_at: string; metadata: { from?: string; to?: string } | null }[]; },
+    staleTime: 60 * 1000,
+    enabled: hasMovementFilter,
+  });
+  const movements = useMemo<MovementEvent[]>(() => rawMovements.map(a => ({
+    lead_id: a.lead_id,
+    created_by: a.created_by,
+    created_at: a.created_at,
+    from: a.metadata?.from ?? null,
+    to: a.metadata?.to ?? null,
+  })), [rawMovements]);
 
   // Hydrate filters from URL once on mount (e.g. when navigated from Dashboard → Status Movement card)
   useEffect(() => {
     if (!search.status && !search.assigned && !search.from && !search.to) return;
+    const fromDate = search.from ? new Date(search.from) : null;
+    const toDate = search.to ? new Date(search.to) : null;
     setFilters((f) => ({
       ...f,
       statusIds: search.status ? [search.status] : f.statusIds,
       assignedTo: search.assigned ?? f.assignedTo,
-      dateFrom: search.from ? new Date(search.from) : f.dateFrom,
-      dateTo: search.to ? new Date(search.to) : f.dateTo,
+      dateFrom: fromDate && !isNaN(fromDate.getTime()) ? fromDate : f.dateFrom,
+      dateTo: toDate && !isNaN(toDate.getTime()) ? toDate : f.dateTo,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [active, setActive] = useState<LeadRow | null>(null);
+  const activeIdxRef = useRef(-1);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 40;
 
-  useEffect(() => { void load(); }, []);
+  // Realtime: debounced invalidation — React Query refetches automatically
   useEffect(() => {
     const ch = supabase
       .channel("leads-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => {
+        if (reloadTimer.current) clearTimeout(reloadTimer.current);
+        reloadTimer.current = setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["leads"] });
+        }, 400);
+      })
       .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      void supabase.removeChannel(ch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Re-fetch leads (only) when date filter changes — passes filter to server so DB does the work
-  useEffect(() => {
-    if (isFirstDateRender.current) { isFirstDateRender.current = false; return; }
-    void loadLeadsOnly(filters.dateFrom, filters.dateTo);
-  }, [filters.dateFrom, filters.dateTo]);
-
-  function buildLeadsUrl(dateFrom?: Date, dateTo?: Date) {
-    const p = new URLSearchParams();
-    if (dateFrom) p.set("from", dateFrom.toISOString());
-    if (dateTo) p.set("to", dateTo.toISOString());
-    return `/api/all-leads${p.size ? "?" + p.toString() : ""}`;
-  }
-
-  async function loadLeadsOnly(dateFrom?: Date, dateTo?: Date) {
-    currentDateRef.current = { from: dateFrom, to: dateTo };
-    const data = await fetch(buildLeadsUrl(dateFrom, dateTo)).then(r => r.json()).catch(() => []);
-    setLeads(data as LeadRow[]);
-  }
-
-  async function load() {
-    const url = buildLeadsUrl(currentDateRef.current.from, currentDateRef.current.to);
-    const [l, s, lb, p, t, ll, tk, ac, ur] = await Promise.all([
-      fetch(url).then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: [], error: e })),
-      supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
-      supabase.from("labels").select("id, name, color").order("name"),
-      (supabase as any).from("profiles_directory").select("id, full_name, email, team_id").order("full_name"),
-      supabase.from("teams").select("id, name").order("name"),
-      supabase.from("lead_labels").select("lead_id, label_id"),
-      supabase.from("tasks").select("lead_id, due_date, status").eq("status", "pending").not("due_date", "is", null),
-      supabase.from("activities").select("lead_id, created_by, created_at, metadata").eq("type", "status_changed").order("created_at", { ascending: false }).limit(2000),
-      supabase.from("user_roles").select("user_id, role").in("role", ["admin", "team_leader", "manager"]),
-    ]);
-    setLeads((l.data ?? []) as LeadRow[]);
-    setStatuses((s.data ?? []) as StatusRow[]);
-    setLabels((lb.data ?? []) as LabelRow[]);
-    setProfiles((p.data ?? []) as ProfileLite[]);
-    setTeams((t.data ?? []) as { id: string; name: string }[]);
-    setAdminIds(new Set(((ur.data ?? []) as { user_id: string }[]).map((r) => r.user_id)));
-
-    const llMap = new Map<string, Set<string>>();
-    ((ll.data ?? []) as { lead_id: string; label_id: string }[]).forEach((r) => {
-      if (!llMap.has(r.lead_id)) llMap.set(r.lead_id, new Set());
-      llMap.get(r.lead_id)!.add(r.label_id);
-    });
-    setLeadLabels(llMap);
-
-    const fuMap = new Map<string, Date>();
-    ((tk.data ?? []) as { lead_id: string; due_date: string | null }[]).forEach((r) => {
-      if (!r.due_date) return;
-      const d = new Date(r.due_date);
-      const existing = fuMap.get(r.lead_id);
-      if (!existing || d < existing) fuMap.set(r.lead_id, d);
-    });
-    setFollowups(fuMap);
-
-    const mv: MovementEvent[] = ((ac.data ?? []) as { lead_id: string; created_by: string | null; created_at: string; metadata: { from?: string; to?: string } | null }[])
-      .map((a) => ({
-        lead_id: a.lead_id,
-        created_by: a.created_by,
-        created_at: a.created_at,
-        from: a.metadata?.from ?? null,
-        to: a.metadata?.to ?? null,
-      }));
-    setMovements(mv);
-  }
 
   // Filter leads by movement criteria first → set of allowed lead ids (or null = no movement filter)
   const movementLeadIds = useMemo<Set<string> | null>(() => {
@@ -165,21 +192,6 @@ function Page() {
     return set;
   }, [movements, filters, statuses]);
 
-  const filteredMovements = useMemo(() => {
-    const { moveFrom, moveTo, moveBy, moveDateFrom, moveDateTo } = filters;
-    const fromName = statuses.find((s) => s.id === moveFrom)?.name;
-    const toName = statuses.find((s) => s.id === moveTo)?.name;
-    return movements.filter((m) => {
-      if (fromName && m.from !== fromName) return false;
-      if (toName && m.to !== toName) return false;
-      if (moveBy !== "any" && m.created_by !== moveBy) return false;
-      const t = new Date(m.created_at).getTime();
-      if (moveDateFrom && t < moveDateFrom.getTime()) return false;
-      if (moveDateTo && t > moveDateTo.getTime() + 86400000) return false;
-      return true;
-    });
-  }, [movements, filters, statuses]);
-
   const filtered = useMemo(() => {
     if (!leads) return [];
     const q = filters.q.trim().toLowerCase();
@@ -194,7 +206,8 @@ function Page() {
       if (movementLeadIds && !movementLeadIds.has(l.id)) return false;
       if (filters.statusIds.length && (!l.status_id || !filters.statusIds.includes(l.status_id))) return false;
       if (filters.sources.length && (!l.lead_source || !filters.sources.includes(l.lead_source))) return false;
-      if (filters.assignedTo !== "any" && l.assigned_to !== filters.assignedTo) return false;
+      if (filters.assignedTo === "__unassigned__" && l.assigned_to !== null) return false;
+      else if (filters.assignedTo !== "any" && filters.assignedTo !== "__unassigned__" && l.assigned_to !== filters.assignedTo) return false;
       if (filters.createdBy !== "any" && l.created_by !== filters.createdBy) return false;
       if (teamMemberIds && !(l.assigned_to && teamMemberIds.has(l.assigned_to))) return false;
       if (filters.labelIds.length) {
@@ -223,6 +236,15 @@ function Page() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageLeads = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
+  // Keep track of the last valid index of the active lead in pageLeads.
+  // When a filter is active and the lead's status changes (removing it from the filtered list),
+  // findIndex returns -1 — but we still want next/prev to work from the last known position.
+  useEffect(() => {
+    if (!active) return;
+    const idx = pageLeads.findIndex((l) => l.id === active.id);
+    if (idx >= 0) activeIdxRef.current = idx;
+  }, [active?.id, pageLeads]);
+
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const n = new Set(prev);
@@ -250,6 +272,7 @@ function Page() {
     if (error) return toast.error(error.message);
     toast.success(`Updated ${ids.length} leads`);
     clearSelection();
+    void queryClient.invalidateQueries({ queryKey: ["leads"] });
   }
   async function bulkReassign(assigned_to: string | null) {
     const ids = Array.from(selected);
@@ -258,7 +281,7 @@ function Page() {
     if (error) return toast.error(error.message);
     toast.success(assigned_to ? `Reassigned ${ids.length} leads` : `Unassigned ${ids.length} leads`);
     clearSelection();
-    load();
+    void queryClient.invalidateQueries({ queryKey: ["leads"] });
   }
   async function bulkAddLabel(label_id: string) {
     const ids = Array.from(selected);
@@ -268,7 +291,7 @@ function Page() {
     if (error) return toast.error(error.message);
     toast.success(`Labeled ${ids.length} leads`);
     clearSelection();
-    load();
+    void queryClient.invalidateQueries({ queryKey: ["lead_labels"] });
   }
   function exportSelected() {
     const set = selected;
@@ -289,28 +312,19 @@ function Page() {
 
   async function addLabelToLead(lead_id: string, label_id: string) {
     if (!label_id) return;
-    const existing = leadLabels.get(lead_id);
-    if (existing?.has(label_id)) return;
+    if (leadLabels.get(lead_id)?.has(label_id)) return;
+    queryClient.setQueryData<{ lead_id: string; label_id: string }[]>(["lead_labels"], old =>
+      [...(old ?? []), { lead_id, label_id }]
+    );
     const { error } = await supabase.from("lead_labels").insert({ lead_id, label_id });
-    if (error) return toast.error(error.message);
-    setLeadLabels((prev) => {
-      const n = new Map(prev);
-      const set = new Set(n.get(lead_id) ?? []);
-      set.add(label_id);
-      n.set(lead_id, set);
-      return n;
-    });
+    if (error) { toast.error(error.message); void queryClient.invalidateQueries({ queryKey: ["lead_labels"] }); }
   }
   async function removeLabelFromLead(lead_id: string, label_id: string) {
+    queryClient.setQueryData<{ lead_id: string; label_id: string }[]>(["lead_labels"], old =>
+      (old ?? []).filter(r => !(r.lead_id === lead_id && r.label_id === label_id))
+    );
     const { error } = await supabase.from("lead_labels").delete().eq("lead_id", lead_id).eq("label_id", label_id);
-    if (error) return toast.error(error.message);
-    setLeadLabels((prev) => {
-      const n = new Map(prev);
-      const set = new Set(n.get(lead_id) ?? []);
-      set.delete(label_id);
-      n.set(lead_id, set);
-      return n;
-    });
+    if (error) { toast.error(error.message); void queryClient.invalidateQueries({ queryKey: ["lead_labels"] }); }
   }
 
   function displayPhone(p: string | null | undefined) {
@@ -335,7 +349,7 @@ function Page() {
     if (!data?.length) return toast.error("Could not delete lead. You may not have permission.");
     toast.success("Lead deleted");
     setSelected((s) => { const ns = new Set(s); ns.delete(id); return ns; });
-    load();
+    void queryClient.invalidateQueries({ queryKey: ["leads"] });
   }
 
   async function bulkDelete() {
@@ -349,7 +363,7 @@ function Page() {
     if (!deleted) return toast.error("Could not delete leads. You may not have permission.");
     toast.success(`Deleted ${deleted} lead${deleted !== 1 ? "s" : ""}`);
     clearSelection();
-    load();
+    void queryClient.invalidateQueries({ queryKey: ["leads"] });
   }
 
   function exportCsv() {
@@ -379,7 +393,7 @@ function Page() {
             <Link to="/import"><Upload className="size-4 mr-1" />Import</Link>
           </Button>
           <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4 mr-1" />Export</Button>
-          <CreateLeadDialog open={creating} onOpenChange={setCreating} statuses={statuses} onCreated={load} />
+          <CreateLeadDialog open={creating} onOpenChange={setCreating} statuses={statuses} onCreated={() => void queryClient.invalidateQueries({ queryKey: ["leads"] })} />
         </div>
       </div>
 
@@ -391,9 +405,6 @@ function Page() {
         profiles={profiles}
         teams={teams}
       />
-
-      {/* keep movements computed to satisfy memo deps; not displayed */}
-      <span className="hidden">{filteredMovements.length}</span>
 
       {selected.size > 0 && (
         <Card className="mt-3 p-2.5 shadow-card flex flex-wrap items-center gap-2 bg-primary/5 border-primary/30">
@@ -564,6 +575,11 @@ function Page() {
         {leads && pageLeads.map((l) => {
           const s = statuses.find((x) => x.id === l.status_id);
           const isSel = selected.has(l.id);
+          const hasTask = followups.has(l.id);
+          const taskDue = followups.get(l.id) ?? null;
+          const now = new Date();
+          const isTaskOverdue = taskDue && taskDue < now && !isSameDay(taskDue, now);
+          const isTaskToday = taskDue && isSameDay(taskDue, now);
           return (
             <Card key={l.id} onClick={() => setActive(l)} className={"p-3 shadow-card active:scale-[0.99] transition " + (isSel ? "ring-1 ring-primary bg-primary/5" : "")}>
               <div className="flex justify-between items-start gap-2">
@@ -583,7 +599,18 @@ function Page() {
                 {s && <Badge className="border-0 shrink-0" style={{ background: s.color, color: "white" }}>{s.name}</Badge>}
               </div>
               <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-muted-foreground">{format(new Date(l.created_at), "dd MMM yyyy")}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-muted-foreground">{format(new Date(l.created_at), "dd MMM yyyy")}</span>
+                  {hasTask && (
+                    <span className={
+                      "inline-flex items-center gap-1 text-xs font-medium " +
+                      (isTaskOverdue ? "text-destructive" : isTaskToday ? "text-amber-600" : "text-blue-600")
+                    }>
+                      <CalendarClock className="size-3" />
+                      {taskDue ? `Task: ${format(taskDue, "dd MMM yyyy")}` : "Task pending"}
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {l.phone && <Button asChild size="icon" variant="outline" className="size-8 text-sky-600"><a href={`tel:${displayPhone(l.phone)}`}><Phone className="size-3.5" /></a></Button>}
                   {l.phone && whatsappUrl(l.phone, dtTemplate, (l as any).doubletick_contact_id) && <Button asChild size="icon" variant="outline" className="size-8 text-emerald-600"><a href={whatsappUrl(l.phone, dtTemplate, (l as any).doubletick_contact_id)} target="_blank" rel="noreferrer"><MessageCircle className="size-3.5" /></a></Button>}
@@ -624,16 +651,18 @@ function Page() {
         profiles={profiles}
         open={!!active}
         onOpenChange={(v) => !v && setActive(null)}
-        onChanged={load}
+        onChanged={() => { void queryClient.invalidateQueries({ queryKey: ["leads"] }); void queryClient.invalidateQueries({ queryKey: ["lead_labels"] }); }}
         onNext={(() => {
           if (!active) return undefined;
-          const idx = pageLeads.findIndex((l) => l.id === active.id);
+          let idx = pageLeads.findIndex((l) => l.id === active.id);
+          if (idx < 0) idx = Math.min(activeIdxRef.current, pageLeads.length - 1);
           if (idx < 0 || idx >= pageLeads.length - 1) return undefined;
           return () => setActive(pageLeads[idx + 1]);
         })()}
         onPrev={(() => {
           if (!active) return undefined;
-          const idx = pageLeads.findIndex((l) => l.id === active.id);
+          let idx = pageLeads.findIndex((l) => l.id === active.id);
+          if (idx < 0) idx = Math.min(activeIdxRef.current, pageLeads.length - 1);
           if (idx <= 0) return undefined;
           return () => setActive(pageLeads[idx - 1]);
         })()}

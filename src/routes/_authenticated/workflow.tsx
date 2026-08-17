@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +99,10 @@ const CAT_META: Record<FlowCategory, { label: string; icon: typeof Flame; color:
 };
 
 function Page() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
+  // For TL/admin: restrict modal to their assigned leads (else they'd see all leads).
+  // For callers: rely on RLS — they already only see their own leads.
+  const workflowTargetUserId = isAdminOrManager(roles) ? user?.id : undefined;
   const navigate = useNavigate();
   const appSettings = useAppSettings();
   const [flowId, setFlowId] = useState<string | null>(null);
@@ -216,28 +219,15 @@ function Page() {
     if (!user) return;
     setLoading(true);
     const workDate = format(new Date(), "yyyy-MM-dd");
-    const { data: flows } = await supabase
-      .from("calling_flows")
-      .select("id, status")
-      .eq("user_id", user.id)
-      .eq("work_date", workDate)
-      .order("created_at", { ascending: false });
-    const flow = flows?.[0] ?? null;
-    if (!flow) {
-      setFlowId(null);
-      setItems([]);
-      setLeadsMap(new Map());
-      setLoading(false);
-      return;
-    }
-    setFlowId(flow.id);
 
-    const [{ data: its }, { data: sts }, { data: lbls }, { data: profs }, _b] = await Promise.all([
-      supabase
-        .from("calling_flow_items")
-        .select("id, lead_id, category, priority, attempts_planned, attempts_done, status, retry_at, retry_count")
-        .eq("flow_id", flow.id)
-        .order("priority"),
+    // Fetch flow + items + leads via supabaseAdmin (bypasses RLS — avoids blank workflow)
+    // Fetch static data in parallel
+    const [wfRes, { data: sts }, { data: lbls }, { data: profs }] = await Promise.all([
+      fetch(`/api/workflow-today?user_id=${user.id}&date=${workDate}`).then((r) => r.json()) as Promise<{
+        flow: { id: string; status: string } | null;
+        items: Item[];
+        leads: Lead[];
+      }>,
       supabase.from("statuses").select("id, name, color, is_sales, is_lost").order("sort_order"),
       supabase.from("labels").select("id, name, color"),
       (supabase.from as unknown as (table: "profiles_directory") => ProfilesDirectoryQuery)(
@@ -245,24 +235,29 @@ function Page() {
       )
         .select("id, full_name, email")
         .order("full_name"),
-      loadBreak(),
     ]);
-    setItems((its ?? []) as unknown as Item[]);
+
+    void loadBreak();
+
     setStatuses((sts ?? []) as Status[]);
     setFullStatuses((sts ?? []) as StatusRow[]);
     setLabels((lbls ?? []) as LabelRow[]);
     setProfiles((profs ?? []) as ProfileLite[]);
 
-    const ids = ((its ?? []) as unknown as Item[]).map((i) => i.lead_id);
+    if (!wfRes.flow) {
+      setFlowId(null);
+      setItems([]);
+      setLeadsMap(new Map());
+      setLoading(false);
+      return;
+    }
+
+    setFlowId(wfRes.flow.id);
+    setItems(wfRes.items);
+    setLeadsMap(new Map((wfRes.leads ?? []).map((l) => [l.id, l])));
+
+    const ids = wfRes.items.map((i) => i.lead_id);
     if (ids.length) {
-      const { data: leads } = await supabase
-        .from("leads")
-        .select(
-          "id, client_name, phone, email, status_id, sales_value, lead_source, created_at, assigned_to, created_by, doubletick_contact_id",
-        )
-        .in("id", ids);
-      setLeadsMap(new Map((leads ?? []).map((l) => [l.id, l as Lead])));
-      // Tasks due today or earlier, still open
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
       const { data: dueTasks } = await supabase
@@ -273,7 +268,6 @@ function Page() {
         .lte("due_date", todayEnd.toISOString());
       setDueTaskLeadIds(new Set((dueTasks ?? []).map((t) => t.lead_id as string)));
     } else {
-      setLeadsMap(new Map());
       setDueTaskLeadIds(new Set());
     }
     setLoading(false);
@@ -287,7 +281,7 @@ function Page() {
     );
     return [...active.filter((i) => !!i.retry_at), ...active.filter((i) => !i.retry_at)];
   }, [items, now]);
-  const current = queue[0];
+  const current = queue.find(i => leadsMap.has(i.lead_id));
   const currentLead = current ? leadsMap.get(current.lead_id) : null;
   const currentStatus = currentLead && statuses.find((s) => s.id === currentLead.status_id);
   const waitingRetries = useMemo(
@@ -388,10 +382,10 @@ function Page() {
   async function advance(notConnected = false, newLeadStatusId?: string | null) {
     if (!current) return;
 
-    // If new status is a sales status → auto-complete queue item immediately
+    // If new status is a sales or lost status → auto-complete queue item immediately
     if (newLeadStatusId) {
       const newStatus = statuses.find((s) => s.id === newLeadStatusId);
-      if (newStatus?.is_sales) {
+      if (newStatus?.is_sales || newStatus?.is_lost) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await supabase.from("calling_flow_items").update({
           attempts_done: current.attempts_planned,
@@ -475,12 +469,10 @@ function Page() {
         setPostOpen(true);
       } else if (autoMode === "running" && !activeBreak && current && user) {
         // Not answered — log attempt and auto-advance to next lead
-        void supabase.from("calls").insert({
-          lead_id: current.lead_id,
-          user_id: user.id,
-          status: "not_connected",
-          duration_seconds: duration,
-          notes: null,
+        void fetch("/api/log-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lead_id: current.lead_id, user_id: user.id, status: "not_connected", duration_seconds: duration, notes: null }),
         }).then(() => advance(true));
       }
     };
@@ -545,8 +537,8 @@ function Page() {
     if (!flowId) return;
     if (!window.confirm("Aaj ka workflow band karna chahte ho? Ye action undo nahi hogi.")) return;
     setAutoMode("off");
-    lastAutoCalledItemId.current = null;
-    await supabase.from("calling_flows").update({ status: "ended" }).eq("id", flowId);
+    lastAutoCalledKey.current = null;
+    await supabase.from("calling_flows").update({ status: "completed" } as never).eq("id", flowId);
     setFlowId(null);
     setItems([]);
     setLeadsMap(new Map());
@@ -582,7 +574,7 @@ function Page() {
             Create workflow
           </Button>
         </Card>
-        <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} />
+        <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} targetUserId={workflowTargetUserId} />
       </div>
     );
   }
@@ -989,7 +981,7 @@ function Page() {
         </Card>
       </div>
 
-      <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} />
+      <CreateFlowModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => load()} targetUserId={workflowTargetUserId} />
       <PostCallSheet
         open={postOpen}
         onOpenChange={setPostOpen}

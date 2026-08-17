@@ -1,14 +1,15 @@
 import { useEffect, useId, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Bell, UserPlus, Flame, CheckCheck, Trash2, ListTodo } from "lucide-react";
+import { Bell, UserPlus, Flame, CheckCheck, Trash2, ListTodo, ClipboardList } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { format, isToday } from "date-fns";
 
 interface Notif {
   id: string;
-  type: "lead_assigned" | "lead_deleted" | "fresh_queue" | "task_due" | "task_created";
+  type: "lead_assigned" | "lead_deleted" | "fresh_queue" | "task_due" | "task_created"
+      | "team_task_assigned" | "team_task_submitted" | "team_task_done" | "team_task_comment";
   title: string;
   body: string;
   at: string;
@@ -29,6 +30,9 @@ function NotifIcon({ type }: { type: Notif["type"] }) {
   if (type === "fresh_queue") return <Flame className="size-3.5 text-orange-500" />;
   if (type === "lead_deleted") return <Trash2 className="size-3.5 text-destructive" />;
   if (type === "task_due" || type === "task_created") return <ListTodo className="size-3.5 text-amber-500" />;
+  if (type === "team_task_assigned" || type === "team_task_comment") return <ClipboardList className="size-3.5 text-blue-500" />;
+  if (type === "team_task_submitted") return <ClipboardList className="size-3.5 text-amber-500" />;
+  if (type === "team_task_done") return <ClipboardList className="size-3.5 text-emerald-500" />;
   return <UserPlus className="size-3.5 text-primary" />;
 }
 
@@ -83,11 +87,43 @@ export function NotificationBell({ sidebarStyle }: { sidebarStyle?: boolean }) {
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks" }, async (payload) => {
         const task = payload.new as { title: string; lead_id: string; created_by: string; due_date: string | null };
-        if (task.created_by === user.id) return; // skip tasks you created yourself
+        if (task.created_by === user.id) return;
         const { data: lead } = await supabase.from("leads").select("assigned_to, client_name").eq("id", task.lead_id).maybeSingle();
         if (lead?.assigned_to === user.id) {
           const due = task.due_date ? ` — due ${format(new Date(task.due_date), "MMM d, h:mm a")}` : "";
           push({ type: "task_created", title: `New task: ${task.title}`, body: `${lead.client_name}${due}` });
+        }
+      })
+      // Team tasks: assigned to you
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_tasks" }, (payload) => {
+        const t = payload.new as { title: string; assigned_to: string; created_by: string };
+        if (t.assigned_to === user.id && t.created_by !== user.id) {
+          push({ type: "team_task_assigned", title: "Task assigned to you", body: t.title });
+        }
+      })
+      // Team tasks: status changes
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "team_tasks" }, (payload) => {
+        const t = payload.new as { id: string; title: string; status: string; created_by: string; assigned_to: string };
+        if (t.status === "submitted" && t.created_by === user.id) {
+          push({ type: "team_task_submitted", title: "Task submitted for review", body: t.title });
+        }
+        if (t.status === "done" && t.assigned_to === user.id) {
+          push({ type: "team_task_done", title: "Task marked done!", body: t.title });
+        }
+      })
+      // Team task comments: notify the other party
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_task_comments" }, async (payload) => {
+        const c = payload.new as { task_id: string; user_id: string; content: string };
+        if (c.user_id === user.id) return; // skip own comments
+        const { data: task } = await supabase
+          .from("team_tasks")
+          .select("title, created_by, assigned_to")
+          .eq("id", c.task_id)
+          .maybeSingle();
+        if (!task) return;
+        const isRelevant = task.created_by === user.id || task.assigned_to === user.id;
+        if (isRelevant) {
+          push({ type: "team_task_comment", title: `New comment on: ${task.title}`, body: c.content.slice(0, 80) });
         }
       })
       .subscribe();

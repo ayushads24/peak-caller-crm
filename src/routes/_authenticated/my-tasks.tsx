@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiUserSelect } from "@/components/multi-user-select";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +33,7 @@ import {
   CalendarRange,
   List as ListIcon,
   AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { isSameDay } from "date-fns";
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
@@ -99,7 +95,9 @@ function bucketOf(t: TaskRow): FilterKey | null {
 }
 
 function Page() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
+  const canViewTeam = isAdminOrManager(roles);
+
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [leads, setLeads] = useState<Map<string, LeadLite>>(new Map());
   const [statuses, setStatuses] = useState<Map<string, StatusLite>>(new Map());
@@ -110,6 +108,19 @@ function Page() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [active, setActive] = useState<TaskRow | null>(null);
 
+  // Member filter — only visible to admin / team_leader
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [memberProfiles, setMemberProfiles] = useState<ProfileLite[]>([]);
+
+  // Load team member list once for the dropdown
+  useEffect(() => {
+    if (!canViewTeam || !user) return;
+    void (async () => {
+      const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email").order("full_name");
+      setMemberProfiles((data ?? []) as ProfileLite[]);
+    })();
+  }, [canViewTeam, user]);
+
   useEffect(() => {
     if (!user) return;
     void load();
@@ -119,35 +130,28 @@ function Page() {
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, selectedMembers]);
 
   async function load() {
     if (!user) return;
     setLoading(true);
-    const { data: ts } = await supabase
-      .from("tasks")
-      .select("id, title, description, due_date, status, priority, completed_at, created_at, created_by, assigned_to, lead_id")
-      .or(`assigned_to.eq.${user.id},and(assigned_to.is.null,created_by.eq.${user.id})`)
-      .order("due_date", { ascending: true, nullsFirst: false })
-      .limit(500);
-    const rows = (ts ?? []) as TaskRow[];
-    setTasks(rows);
 
-    const leadIds = Array.from(new Set(rows.map((r) => r.lead_id)));
-    const userIds = Array.from(new Set(rows.flatMap((r) => [r.assigned_to, r.created_by]).filter(Boolean) as string[]));
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
 
-    const [{ data: lds }, { data: sts }, { data: profs }] = await Promise.all([
-      leadIds.length
-        ? supabase.from("leads").select("id, client_name, phone, status_id, doubletick_contact_id").in("id", leadIds)
-        : Promise.resolve({ data: [] as LeadLite[] }),
-      supabase.from("statuses").select("id, name, color").order("sort_order"),
-      userIds.length
-        ? (supabase as any).from("profiles_directory").select("id, full_name, email").in("id", userIds)
-        : Promise.resolve({ data: [] as ProfileLite[] }),
-    ]);
-    setLeads(new Map(((lds ?? []) as LeadLite[]).map((l) => [l.id, l])));
+    // Always use RLS-bypass API so users see all tasks assigned to them
+    // (direct supabase client misses tasks on leads not owned by the user)
+    const targetIds = selectedMembers.length > 0 ? selectedMembers : [user.id];
+    const res = await fetch(`/api/tasks-by-user?user_ids=${targetIds.join(",")}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) { setLoading(false); return; }
+    const json = await res.json() as { tasks: TaskRow[]; leads: LeadLite[]; profiles: { id: string; full_name: string | null }[] };
+    setTasks(json.tasks);
+    setLeads(new Map(json.leads.map((l) => [l.id, l])));
+    setProfiles(new Map(json.profiles.map((p) => [p.id, { id: p.id, full_name: p.full_name, email: null }])));
+    const { data: sts } = await supabase.from("statuses").select("id, name, color").order("sort_order");
     setStatuses(new Map(((sts ?? []) as StatusLite[]).map((s) => [s.id, s])));
-    setProfiles(new Map(((profs ?? []) as ProfileLite[]).map((p) => [p.id, p])));
     setLoading(false);
   }
 
@@ -214,15 +218,33 @@ function Page() {
     <div className="p-4 sm:p-6 md:p-10 max-w-6xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">My Tasks</h1>
-          <p className="text-muted-foreground text-sm mt-1">Apne assigned tasks ek jagah se manage karo.</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
+            {selectedMembers.length === 0
+              ? "My Tasks"
+              : selectedMembers.length === 1
+                ? (memberProfiles.find(p => p.id === selectedMembers[0])?.full_name ?? "Tasks")
+                : `Team Tasks (${selectedMembers.length} members)`}
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {selectedMembers.length === 0 ? "Apne assigned tasks ek jagah se manage karo." : "Team member ke tasks dekh rahe ho."}
+          </p>
         </div>
-        <Tabs value={view} onValueChange={(v) => setView(v as "list" | "calendar")}>
-          <TabsList>
-            <TabsTrigger value="list"><ListIcon className="size-4 mr-1.5" />List</TabsTrigger>
-            <TabsTrigger value="calendar"><CalendarRange className="size-4 mr-1.5" />Calendar</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2 flex-wrap">
+          {canViewTeam && memberProfiles.length > 0 && (
+            <MultiUserSelect
+              profiles={memberProfiles}
+              selected={selectedMembers}
+              onChange={(ids) => { setSelectedMembers(ids); setFilter("today"); }}
+              placeholder="My Tasks"
+            />
+          )}
+          <Tabs value={view} onValueChange={(v) => setView(v as "list" | "calendar")}>
+            <TabsList>
+              <TabsTrigger value="list"><ListIcon className="size-4 mr-1.5" />List</TabsTrigger>
+              <TabsTrigger value="calendar"><CalendarRange className="size-4 mr-1.5" />Calendar</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -446,6 +468,7 @@ function TaskActionsDialog({
 }) {
   const { user } = useAuth();
   const appSettings = useAppSettings();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [reschedDate, setReschedDate] = useState<string>("");
@@ -471,12 +494,13 @@ function TaskActionsDialog({
   async function complete() {
     if (!task) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", task.id);
+    const res = await fetch("/api/update-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: task.id, status: "completed", completed_at: new Date().toISOString() }),
+    });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (!res.ok) return toast.error(await res.text());
     toast.success("Task marked complete");
     onChanged();
     onClose();
@@ -485,15 +509,15 @@ function TaskActionsDialog({
   async function reschedule() {
     if (!task) return;
     if (!reschedDate) return toast.error("Pick a date");
-    // Interpret the picker values as IST wall-clock, then convert to UTC ISO.
     const iso = fromZonedTime(`${reschedDate}T${reschedTime || "09:00"}:00`, IST_TZ).toISOString();
     setBusy(true);
-    const { error } = await supabase
-      .from("tasks")
-      .update({ due_date: iso, status: task.status === "completed" ? "pending" : task.status })
-      .eq("id", task.id);
+    const res = await fetch("/api/update-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: task.id, due_date: iso, status: task.status === "completed" ? "pending" : task.status }),
+    });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (!res.ok) return toast.error(await res.text());
     toast.success("Task rescheduled");
     onChanged();
     onClose();
@@ -502,8 +526,12 @@ function TaskActionsDialog({
   async function savePriority(p: Priority) {
     if (!task) return;
     setPriority(p);
-    const { error } = await supabase.from("tasks").update({ priority: p }).eq("id", task.id);
-    if (error) toast.error(error.message);
+    const res = await fetch("/api/update-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: task.id, priority: p }),
+    });
+    if (!res.ok) toast.error(await res.text());
     else { toast.success("Priority updated"); onChanged(); }
   }
 
@@ -544,6 +572,15 @@ function TaskActionsDialog({
         )}
 
         <div className="flex flex-wrap gap-2">
+          {lead && (
+            <Button
+              onClick={() => { onClose(); void navigate({ to: "/leads/$leadId", params: { leadId: lead.id }, search: { from: "my-tasks" } }); }}
+              variant="default"
+              size="sm"
+            >
+              <ExternalLink className="size-4 mr-1.5" />View Lead
+            </Button>
+          )}
           <Button onClick={call} variant="outline" size="sm"><Phone className="size-4 mr-1.5" />Call</Button>
           <Button onClick={whatsapp} variant="outline" size="sm" className="text-emerald-600 hover:text-emerald-700"><MessageCircle className="size-4 mr-1.5" />WhatsApp</Button>
           {task.status !== "completed" && (

@@ -21,9 +21,11 @@ export function useAndroidBack(isOpen: boolean, onClose: () => void) {
 
     if (!isOpen && pushed.current) {
       pushed.current = false;
-      // Sheet was closed by UI (not back btn) — remove the orphan hash entry
+      // Sheet was closed by UI (not back btn) — replace URL in-place to remove hash
+      // Using replaceState (not history.back) to avoid triggering an extra navigation
+      // that could send user to the previous page (e.g. dashboard)
       if (window.location.hash === "#sheet") {
-        history.back();
+        history.replaceState(null, "", window.location.pathname + window.location.search);
       }
     }
   }, [isOpen]);

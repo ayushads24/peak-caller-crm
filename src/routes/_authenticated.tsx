@@ -4,14 +4,36 @@ import { useAuth, isAdmin, hasPermission, isAdminOrManager } from "@/hooks/use-a
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notification-bell";
-import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2, Trophy, Activity } from "lucide-react";
+import { PmLeadAlarm } from "@/components/pm-lead-alarm";
+import { LayoutDashboard, Users, Settings, LogOut, Zap, Loader2, Phone, UserCog, Upload, Plug, ListChecks, ListTodo, Share2, Trophy, Activity, IndianRupee, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated")({ component: Layout });
 
+const CRON_KEY = "ctg_cron_last";
+
+// Trigger server-side push check whenever any user opens/focuses the app.
+// This replaces the need for an external cron service — as long as someone
+// uses the app, due-task push notifications get sent to all users.
+function useSelfCron() {
+  useEffect(() => {
+    async function ping() {
+      const last = Number(localStorage.getItem(CRON_KEY) ?? "0");
+      if (Date.now() - last < 5 * 60 * 1000) return; // max once per 5 min
+      localStorage.setItem(CRON_KEY, String(Date.now()));
+      try { await fetch("/api/push-cron-due"); } catch { /* ignore */ }
+    }
+    void ping();
+    function onVisible() { if (document.visibilityState === "visible") void ping(); }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+}
+
 function Layout() {
   const { user, loading, roles, permissions } = useAuth();
   const navigate = useNavigate();
+  useSelfCron();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -34,7 +56,8 @@ function Layout() {
   const allNav = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", perm: "dashboard.view" },
     { to: "/workflow",  icon: Phone,           label: "Workflow",  perm: "workflow.view" },
-    { to: "/my-tasks",  icon: ListTodo,        label: "My Tasks",  perm: "tasks.view" },
+    { to: "/my-tasks",      icon: ListTodo,      label: "My Tasks",    perm: "tasks.view" },
+    { to: "/team-tasks",   icon: ClipboardList, label: "Team Tasks",  perm: "tasks.view" },
     { to: "/leads",     icon: Users,           label: "Leads",     perm: "leads.view" },
     { to: "/import",    icon: Upload,          label: "Import",    perm: "leads.import" },
     { to: "/integrations", icon: Plug,         label: "Integrations", perm: "leads.view" },
@@ -55,6 +78,12 @@ function Layout() {
     const actItem = { to: "/activity", icon: Activity, label: "Activity" };
     if (lbIdx >= 0) navItems.splice(lbIdx + 1, 0, actItem);
     else navItems.push(actItem);
+  }
+  {
+    const settingsIdx = navItems.findIndex((i) => i.to === "/settings");
+    const rlItem = { to: "/rate-list", icon: IndianRupee, label: "Rate List" };
+    if (settingsIdx >= 0) navItems.splice(settingsIdx, 0, rlItem);
+    else navItems.push(rlItem);
   }
   if (canManageTeamFlows) {
     const wfIdx = navItems.findIndex((i) => i.to === "/workflow");
@@ -104,6 +133,7 @@ function Layout() {
         <Outlet />
         <div className="h-20 md:hidden" />
       </main>
+      <PmLeadAlarm />
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border overflow-x-auto pb-[max(0.5rem,env(safe-area-inset-bottom))]">

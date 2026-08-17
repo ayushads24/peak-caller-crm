@@ -5,13 +5,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { MultiUserSelect } from "@/components/multi-user-select";
 import { Loader2, Phone, CheckCircle2, TrendingUp, Clock, Trophy, RefreshCw, BarChart2 } from "lucide-react";
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, eachHourOfInterval, addHours } from "date-fns";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, eachHourOfInterval, addHours, differenceInDays } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export const Route = createFileRoute("/_authenticated/leaderboard")({ component: Page });
 
-type Period = "today" | "week" | "month";
+type Period = "today" | "week" | "month" | "custom";
 type SortBy = "calls" | "connected" | "rate" | "talktime";
 
 interface CallerStat {
@@ -23,11 +25,17 @@ interface CallerStat {
   talkSeconds: number;
 }
 
-function periodRange(p: Period): { from: Date; to: Date; label: string } {
+interface ProfileLite { id: string; full_name: string | null; email: string | null }
+
+function periodRange(p: Period, cFrom?: string, cTo?: string): { from: Date; to: Date; label: string } {
   const now = new Date();
-  if (p === "today") return { from: startOfDay(now), to: endOfDay(now), label: format(now, "d MMM yyyy") };
-  if (p === "week")  return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }), label: "This Week" };
-  return { from: startOfMonth(now), to: endOfMonth(now), label: format(now, "MMMM yyyy") };
+  if (p === "today")  return { from: startOfDay(now), to: endOfDay(now), label: format(now, "d MMM yyyy") };
+  if (p === "week")   return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }), label: "This Week" };
+  if (p === "month")  return { from: startOfMonth(now), to: endOfMonth(now), label: format(now, "MMMM yyyy") };
+  // custom
+  const from = startOfDay(new Date(cFrom ?? format(now, "yyyy-MM-dd")));
+  const to   = endOfDay(new Date(cTo ?? format(now, "yyyy-MM-dd")));
+  return { from, to, label: `${format(from, "d MMM")} – ${format(to, "d MMM yyyy")}` };
 }
 
 function fmtTime(secs: number) {
@@ -55,34 +63,49 @@ function RateColor(rate: number) {
 function Page() {
   const { user, roles } = useAuth();
   const isCaller = roles.length > 0 && !roles.includes("admin") && !roles.includes("team_leader") && !roles.includes("project_manager") && !roles.includes("manager");
+  const canFilterUsers = !isCaller;
+
   const [period, setPeriod] = useState<Period>("today");
+  const [customFrom, setCustomFrom] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [customTo, setCustomTo]   = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [memberProfiles, setMemberProfiles] = useState<ProfileLite[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>("calls");
   const [stats, setStats] = useState<CallerStat[]>([]);
   const [graphData, setGraphData] = useState<{ label: string; total: number; connected: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  async function load(p = period) {
+  // Load member profiles for filter dropdown
+  useEffect(() => {
+    if (!canFilterUsers) return;
+    void (async () => {
+      const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email").order("full_name");
+      setMemberProfiles((data ?? []) as ProfileLite[]);
+    })();
+  }, [canFilterUsers]);
+
+  async function load(p = period, cFrom = customFrom, cTo = customTo, uIds = selectedUsers) {
     if (!user) return;
     setLoading(true);
-    const { from, to } = periodRange(p);
-    let callsQuery = supabase
-      .from("calls")
-      .select("user_id, status, duration_seconds, called_at")
-      .gte("called_at", from.toISOString())
-      .lte("called_at", to.toISOString());
-    if (isCaller) callsQuery = callsQuery.eq("user_id", user.id);
+    const { from, to } = periodRange(p, cFrom, cTo);
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+
+    if (isCaller) {
+      params.set("user_ids", user.id);
+    } else if (uIds.length > 0) {
+      params.set("user_ids", uIds.join(","));
+    }
 
     const [callsRes, profilesRes] = await Promise.all([
-      callsQuery,
-      supabase.from("profiles_directory").select("id, full_name, email").order("full_name"),
+      fetch(`/api/leaderboard-calls?${params}`).then((r) => r.json()) as Promise<{ user_id: string; status: string; duration_seconds: number; called_at: string }[]>,
+      supabase.from("profiles_directory" as any).select("id, full_name, email").order("full_name"),
     ]);
 
-    const calls = callsRes.data ?? [];
-    const profiles = profilesRes.data ?? [];
+    const calls = callsRes ?? [];
+    const profiles = (profilesRes.data ?? []) as ProfileLite[];
     const profileMap = new Map(profiles.map((p) => [p.id, (p.full_name || p.email || "Unknown") as string]));
 
-    // Aggregate by user_id
     const map = new Map<string, { total: number; connected: number; secs: number }>();
     for (const c of calls) {
       const uid = c.user_id as string;
@@ -106,46 +129,29 @@ function Page() {
         talkSeconds: agg.secs,
       });
     }
-
     setStats(result);
 
-    // Build time-series graph data
-    if (p === "today") {
-      // Hourly buckets for today
+    // Graph — hourly if single day, daily otherwise
+    const daysDiff = differenceInDays(to, from);
+    if (daysDiff < 1) {
       const hours = eachHourOfInterval({ start: from, end: to });
       const buckets = hours.map((h) => {
         const hStart = h.getTime();
         const hEnd = addHours(h, 1).getTime();
-        const slice = calls.filter((c) => {
-          const t = new Date(c.called_at as string).getTime();
-          return t >= hStart && t < hEnd;
-        });
-        return {
-          label: format(h, "ha"), // e.g. "9am"
-          total: slice.length,
-          connected: slice.filter((c) => c.status === "connected").length,
-        };
+        const slice = calls.filter((c) => { const t = new Date(c.called_at as string).getTime(); return t >= hStart && t < hEnd; });
+        return { label: format(h, "ha"), total: slice.length, connected: slice.filter((c) => c.status === "connected").length };
       });
-      // Only keep hours up to now + trim leading zeros
       const nowH = new Date().getHours();
-      const trimmed = buckets.slice(0, nowH + 1);
+      const trimmed = p === "today" ? buckets.slice(0, nowH + 1) : buckets;
       const firstNonZero = trimmed.findIndex((b) => b.total > 0);
       setGraphData(firstNonZero >= 0 ? trimmed.slice(Math.max(0, firstNonZero - 1)) : trimmed.slice(-8));
     } else {
-      // Daily buckets for week/month
       const days = eachDayOfInterval({ start: from, end: to });
       const buckets = days.map((d) => {
         const dStart = startOfDay(d).getTime();
         const dEnd = endOfDay(d).getTime();
-        const slice = calls.filter((c) => {
-          const t = new Date(c.called_at as string).getTime();
-          return t >= dStart && t <= dEnd;
-        });
-        return {
-          label: format(d, "d MMM"),
-          total: slice.length,
-          connected: slice.filter((c) => c.status === "connected").length,
-        };
+        const slice = calls.filter((c) => { const t = new Date(c.called_at as string).getTime(); return t >= dStart && t <= dEnd; });
+        return { label: format(d, "d MMM"), total: slice.length, connected: slice.filter((c) => c.status === "connected").length };
       });
       setGraphData(buckets);
     }
@@ -154,32 +160,37 @@ function Page() {
     setLoading(false);
   }
 
-  useEffect(() => { void load(period); }, [period, user?.id]);
+  useEffect(() => { void load(period, customFrom, customTo, selectedUsers); }, [period, selectedUsers, user?.id]);
 
-  // Realtime — refresh on any new call
   useEffect(() => {
     const ch = supabase
       .channel("leaderboard-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calls" }, () => void load(period))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calls" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, [period]);
+  }, [period, customFrom, customTo, selectedUsers]);
 
   const sorted = useMemo(() => {
     return [...stats].sort((a, b) => {
-      if (sortBy === "calls")    return b.totalCalls - a.totalCalls;
+      if (sortBy === "calls")     return b.totalCalls - a.totalCalls;
       if (sortBy === "connected") return b.connected - a.connected;
-      if (sortBy === "rate")     return b.rate - a.rate;
+      if (sortBy === "rate")      return b.rate - a.rate;
       return b.talkSeconds - a.talkSeconds;
     });
   }, [stats, sortBy]);
 
-  const maxCalls = sorted[0]?.totalCalls || 1;
-  const totalCalls = stats.reduce((s, c) => s + c.totalCalls, 0);
+  const maxCalls       = sorted[0]?.totalCalls || 1;
+  const totalCalls     = stats.reduce((s, c) => s + c.totalCalls, 0);
   const totalConnected = stats.reduce((s, c) => s + c.connected, 0);
-  const totalTalk = stats.reduce((s, c) => s + c.talkSeconds, 0);
-  const teamRate = totalCalls > 0 ? Math.round((totalConnected / totalCalls) * 100) : 0;
-  const { label } = periodRange(period);
+  const totalTalk      = stats.reduce((s, c) => s + c.talkSeconds, 0);
+  const teamRate       = totalCalls > 0 ? Math.round((totalConnected / totalCalls) * 100) : 0;
+  const { label }      = periodRange(period, customFrom, customTo);
+
+  const selectedUsersLabel = selectedUsers.length === 0
+    ? null
+    : selectedUsers.length === 1
+      ? (memberProfiles.find((p) => p.id === selectedUsers[0])?.full_name ?? "User")
+      : `${selectedUsers.length} members`;
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -189,18 +200,20 @@ function Page() {
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
             <Trophy className="size-7 text-amber-500" /> {isCaller ? "My Stats" : "Leaderboard"}
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">{label} · {isCaller ? "Your personal call stats" : "Live rankings"}</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {label}{selectedUsersLabel ? ` · ${selectedUsersLabel}` : isCaller ? " · Your personal call stats" : " · Live rankings"}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Period selector */}
+          {/* Period buttons */}
           <div className="flex rounded-lg border overflow-hidden text-sm">
-            {(["today", "week", "month"] as Period[]).map((p) => (
+            {(["today", "week", "month", "custom"] as Period[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 font-medium capitalize transition-colors ${period === p ? "bg-primary text-white" : "bg-card text-muted-foreground hover:bg-muted"}`}
+                className={`px-3 py-1.5 font-medium transition-colors ${period === p ? "bg-primary text-white" : "bg-card text-muted-foreground hover:bg-muted"}`}
               >
-                {p === "today" ? "Today" : p === "week" ? "This Week" : "This Month"}
+                {p === "today" ? "Today" : p === "week" ? "This Week" : p === "month" ? "This Month" : "Custom"}
               </button>
             ))}
           </div>
@@ -210,6 +223,37 @@ function Page() {
           </Button>
         </div>
       </div>
+
+      {/* Custom date range picker */}
+      {period === "custom" && (
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
+          <span className="text-sm text-muted-foreground">From</span>
+          <Input
+            type="date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="h-8 text-sm w-40"
+          />
+          <span className="text-sm text-muted-foreground">To</span>
+          <Input
+            type="date"
+            value={customTo}
+            min={customFrom}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="h-8 text-sm w-40"
+          />
+          <Button size="sm" className="h-8" onClick={() => void load(period, customFrom, customTo, selectedUser)}>
+            Apply
+          </Button>
+        </div>
+      )}
+
+      {/* User filter — only for non-callers */}
+      {canFilterUsers && memberProfiles.length > 0 && (
+        <div className="flex items-center gap-2 mb-5">
+          <MultiUserSelect profiles={memberProfiles} selected={selectedUsers} onChange={setSelectedUsers} />
+        </div>
+      )}
 
       {/* Team summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -251,13 +295,13 @@ function Page() {
         </Card>
       </div>
 
-      {/* Hourly / Daily call graph */}
+      {/* Graph */}
       {graphData.length > 0 && (
         <Card className="p-4 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 className="size-4 text-primary" />
             <h2 className="font-semibold text-sm">
-              {period === "today" ? "Calls by Hour" : period === "week" ? "Calls by Day (This Week)" : "Calls by Day (This Month)"}
+              {period === "today" ? "Calls by Hour" : "Calls by Day"}
             </h2>
             <div className="flex items-center gap-3 ml-auto text-xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="size-2.5 rounded-sm inline-block" style={{ background: "#6366f1" }} /> Total</span>
@@ -267,28 +311,10 @@ function Page() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={graphData} barCategoryGap="30%" barGap={2}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-                width={28}
-              />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={28} />
               <Tooltip
-                contentStyle={{
-                  background: "#ffffff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: "#111827",
-                  boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                }}
+                contentStyle={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, color: "#111827", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}
                 cursor={{ fill: "#f3f4f6", radius: 4 }}
                 formatter={(value: number, name: string) => [value, name === "total" ? "Total Calls" : "Connected"]}
                 labelStyle={{ fontWeight: 600, color: "#111827", marginBottom: 4 }}
@@ -342,18 +368,14 @@ function Page() {
                 className={`px-4 py-3 transition-all ${isTop ? "border-amber-400/40 shadow-sm" : ""} ${rank === 1 ? "bg-gradient-to-r from-amber-500/5 to-transparent" : ""}`}
               >
                 <div className="flex items-center gap-3">
-                  {/* Rank */}
                   <div className="shrink-0 w-8 flex items-center justify-center">
                     <RankBadge rank={rank} />
                   </div>
-
-                  {/* Name + bar */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm truncate">{c.name}</span>
                       {rank === 1 && <Badge className="border-0 bg-amber-500 text-white text-[9px] px-1.5 py-0 h-4 shrink-0">Leader</Badge>}
                     </div>
-                    {/* Progress bar */}
                     <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${rank === 1 ? "bg-amber-500" : rank === 2 ? "bg-slate-400" : rank === 3 ? "bg-orange-400" : "bg-primary/50"}`}
@@ -361,8 +383,6 @@ function Page() {
                       />
                     </div>
                   </div>
-
-                  {/* Stats */}
                   <div className="flex items-center gap-4 shrink-0 text-right">
                     <div className="hidden sm:block text-center min-w-[52px]">
                       <div className="font-display text-lg font-bold leading-none">{c.totalCalls}</div>
@@ -380,7 +400,6 @@ function Page() {
                       <div className="font-display text-sm font-bold leading-none text-violet-600">{fmtTime(c.talkSeconds)}</div>
                       <div className="text-[10px] text-muted-foreground">Talk Time</div>
                     </div>
-                    {/* Mobile: calls only */}
                     <div className="sm:hidden text-center min-w-[36px]">
                       <div className="font-display text-lg font-bold leading-none">{c.totalCalls}</div>
                       <div className="text-[10px] text-muted-foreground">Calls</div>

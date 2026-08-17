@@ -140,8 +140,27 @@ export function PostCallSheet({
     setBusy(true);
     const duration = durationStartedAt ? Math.round((Date.now() - durationStartedAt) / 1000) : 0;
 
-    await supabase.from("calls").insert({
-      lead_id: lead.id, user_id: user.id, status: callStatus, duration_seconds: duration, notes: note || null,
+    const callLabels: Record<CallStatus, string> = {
+      connected: "connected",
+      not_connected: "not connected",
+      voicemail: "voicemail",
+      busy: "busy",
+      wrong_number: "wrong number",
+    };
+    const durStr = duration > 0
+      ? ` — ${Math.floor(duration / 60) > 0 ? `${Math.floor(duration / 60)}m ` : ""}${duration % 60}s`
+      : "";
+    await supabase.from("activities").insert({
+      lead_id: lead.id,
+      description: `Called ${lead.client_name} — ${callLabels[callStatus]}${durStr}`,
+      type: "call_logged" as const,
+      created_by: user.id,
+    });
+
+    await fetch("/api/log-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: lead.id, user_id: user.id, status: callStatus, duration_seconds: duration, notes: note || null }),
     });
 
     const leadUpdate: Record<string, unknown> = {};
@@ -154,7 +173,11 @@ export function PostCallSheet({
       leadUpdate.assigned_at = new Date().toISOString();
     }
     if (Object.keys(leadUpdate).length > 0) {
-      await supabase.from("leads").update(leadUpdate).eq("id", lead.id);
+      await fetch("/api/update-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, userId: user.id, fields: leadUpdate }),
+      });
     }
 
     if (note.trim()) {
@@ -173,8 +196,11 @@ export function PostCallSheet({
     }
 
     if (selectedLabels.length > 0) {
-      const rows = selectedLabels.map((l) => ({ lead_id: lead.id, label_id: l.id }));
-      await supabase.from("lead_labels").upsert(rows, { onConflict: "lead_id,label_id", ignoreDuplicates: true });
+      await fetch("/api/update-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, labelsToAdd: selectedLabels.map((l) => l.id) }),
+      });
     }
 
     setBusy(false);
@@ -194,7 +220,7 @@ export function PostCallSheet({
     : "bg-primary/10 text-primary";
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) void commit(false); else onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onOpenChange(false); else onOpenChange(v); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0">
 
         {/* Header — name + phone + timer */}

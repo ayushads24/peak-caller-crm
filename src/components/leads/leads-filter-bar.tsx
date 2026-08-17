@@ -173,7 +173,7 @@ export function LeadsFilterBar({
           {filters.sources.map((s) => <Chip key={s} onClear={() => toggleArr("sources", s)}>Source: {s}</Chip>)}
           {filters.assignedTo !== "any" && (
             <Chip onClear={() => onChange({ ...filters, assignedTo: "any" })}>
-              Assigned: {profiles.find((p) => p.id === filters.assignedTo)?.full_name ?? "…"}
+              Assigned: {filters.assignedTo === "__unassigned__" ? "Unassigned" : (profiles.find((p) => p.id === filters.assignedTo)?.full_name ?? "…")}
             </Chip>
           )}
           {(filters.dateFrom || filters.dateTo) && <Chip onClear={() => onChange({ ...filters, dateFrom: undefined, dateTo: undefined })}>
@@ -416,6 +416,7 @@ function UserSelect({ value, onChange, profiles }: { value: string; onChange: (v
       <SelectTrigger><SelectValue placeholder="Anyone" /></SelectTrigger>
       <SelectContent>
         <SelectItem value="any">Anyone</SelectItem>
+        <SelectItem value="__unassigned__">Unassigned</SelectItem>
         {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name || p.email || p.id.slice(0, 8)}</SelectItem>)}
       </SelectContent>
     </Select>

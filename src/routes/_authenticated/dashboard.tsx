@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdminOrManager } from "@/hooks/use-auth";
@@ -26,29 +27,17 @@ function Page() {
   const isManager = isAdminOrManager(roles);
   const isPM = roles.includes("project_manager");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const today = new Date();
+  const todayStr = format(today, "yyyy-MM-dd");
+
   const [from, setFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
   const [to, setTo] = useState<string>(format(endOfMonth(today), "yyyy-MM-dd"));
-
-  const [statuses, setStatuses] = useState<StatusRow[]>([]);
-  const [leads, setLeads] = useState<LeadLite[]>([]);
-  const [connectedLeadIds, setConnectedLeadIds] = useState<Set<string>>(new Set());
-  const [meetingsScheduled, setMeetingsScheduled] = useState(0);
   const [kpiSheet, setKpiSheet] = useState<{ open: boolean; label: string; leads: LeadLite[] }>({ open: false, label: "", leads: [] });
-  const [callsToday, setCallsToday] = useState(0);
-  const [pendingTasks, setPendingTasks] = useState<{ id: string; title: string; due_date: string | null; lead_id: string }[]>([]);
-  const [punch, setPunch] = useState<{ id: string; punch_in_at: string; punch_out_at: string | null } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busyPunch, setBusyPunch] = useState(false);
-
-  // Status Movement independent filters
   const [smFrom, setSmFrom] = useState<string>(format(startOfMonth(today), "yyyy-MM-dd"));
   const [smTo, setSmTo] = useState<string>(format(endOfMonth(today), "yyyy-MM-dd"));
   const [smAssigned, setSmAssigned] = useState<string>("all");
-  const [smLeads, setSmLeads] = useState<LeadLite[] | null>(null);
-  const [smLoading, setSmLoading] = useState(true);
-  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
-
   const [tasksOpen, setTasksOpen] = useState(false);
   const [createFlowOpen, setCreateFlowOpen] = useState(false);
   const [punchOutGuard, setPunchOutGuard] = useState<{ pending: number } | null>(null);
@@ -58,85 +47,147 @@ function Page() {
   const smFromIso = useMemo(() => startOfDay(new Date(smFrom)).toISOString(), [smFrom]);
   const smToIso = useMemo(() => endOfDay(new Date(smTo)).toISOString(), [smTo]);
 
-  useEffect(() => { if (user) void load(); }, [user, fromIso, toIso, isPM]);
-  useEffect(() => { if (user) void loadStatusMovement(); }, [user, smFromIso, smToIso, smAssigned, isPM]);
+  // Static data — shared cache across pages (5-min staleTime)
+  const { data: statuses = [] } = useQuery<StatusRow[]>({
+    queryKey: ["statuses"],
+    queryFn: async () => {
+      const { data } = await supabase.from("statuses").select("id, name, color, is_sales, is_lost, sort_order").order("sort_order");
+      return (data ?? []) as StatusRow[];
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
 
+  const { data: profiles = [] } = useQuery<ProfileLite[]>({
+    queryKey: ["profiles_directory"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email").order("full_name");
+      return (data ?? []) as ProfileLite[];
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user,
+  });
+
+  // Main dashboard data: leads + connected calls + meetings
+  const { data: dashMain, isLoading: loading } = useQuery({
+    queryKey: ["dashboard_main", fromIso, toIso, user?.id, isPM],
+    queryFn: async () => {
+      const leadsQuery = isPM
+        ? supabase.from("leads").select("id, client_name, status_id, sales_value, created_at, assigned_to").eq("assigned_to", user!.id)
+        : supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso);
+      const [l, calls, mSched] = await Promise.all([
+        leadsQuery,
+        supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
+        supabase.from("meetings").select("id", { count: "exact", head: true }).gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
+      ]);
+      return {
+        leads: (l.data ?? []) as LeadLite[],
+        connectedLeadIds: new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)),
+        meetingsScheduled: mSched.count ?? 0,
+      };
+    },
+    staleTime: 30 * 1000,
+    enabled: !!user,
+    placeholderData: (prev) => prev,
+  });
+
+  // Calls made today by this user
+  const { data: callsToday = 0 } = useQuery({
+    queryKey: ["dashboard_calls_today", user?.id, todayStr],
+    queryFn: async () => {
+      const todayStart = startOfDay(new Date()).toISOString();
+      const todayEnd = endOfDay(new Date()).toISOString();
+      const { count } = await supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user!.id).gte("called_at", todayStart).lte("called_at", todayEnd);
+      return count ?? 0;
+    },
+    staleTime: 30 * 1000,
+    enabled: !!user,
+  });
+
+  // Pending tasks created by this user
+  const { data: pendingTasks = [] } = useQuery<{ id: string; title: string; due_date: string | null; lead_id: string }[]>({
+    queryKey: ["dashboard_tasks", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user!.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50);
+      return (data ?? []) as { id: string; title: string; due_date: string | null; lead_id: string }[];
+    },
+    staleTime: 30 * 1000,
+    enabled: !!user,
+  });
+
+  // Status movement panel
+  const { data: smLeadsData, isLoading: smLoading } = useQuery<LeadLite[]>({
+    queryKey: ["dashboard_sm", smFromIso, smToIso, smAssigned, user?.id, isPM],
+    queryFn: async () => {
+      let q = supabase.from("leads").select("id, client_name, status_id, sales_value, created_at");
+      if (isPM) {
+        q = (q as any).eq("assigned_to", user!.id);
+      } else {
+        q = (q as any).gte("created_at", smFromIso).lte("created_at", smToIso);
+        if (smAssigned !== "all") q = (q as any).eq("assigned_to", smAssigned);
+      }
+      const { data } = await q;
+      return (data ?? []) as LeadLite[];
+    },
+    staleTime: 30 * 1000,
+    enabled: !!user,
+    placeholderData: (prev) => prev,
+  });
+  const smLeads: LeadLite[] | null = smLeadsData ?? null;
+
+  // Punch record for today
+  const { data: punch = null } = useQuery<{ id: string; punch_in_at: string; punch_out_at: string | null } | null>({
+    queryKey: ["punch", user?.id, todayStr],
+    queryFn: async () => {
+      const workDate = format(new Date(), "yyyy-MM-dd");
+      const { data } = await supabase.from("attendance").select("id, punch_in_at, punch_out_at").eq("user_id", user!.id).eq("work_date", workDate).maybeSingle();
+      return data ?? null;
+    },
+    staleTime: 60 * 1000,
+    enabled: !!user && !isManager,
+  });
+
+  // Derived from dashMain
+  const leads = dashMain?.leads ?? [];
+  const connectedLeadIds = dashMain?.connectedLeadIds ?? new Set<string>();
+  const meetingsScheduled = dashMain?.meetingsScheduled ?? 0;
+
+  // Realtime: invalidate relevant queries on DB changes
   useEffect(() => {
     if (!user) return;
+    const timer = { main: null as ReturnType<typeof setTimeout> | null, sm: null as ReturnType<typeof setTimeout> | null };
+    const invalidateMain = () => {
+      if (timer.main) clearTimeout(timer.main);
+      timer.main = setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["dashboard_main"] });
+        void queryClient.invalidateQueries({ queryKey: ["dashboard_calls_today"] });
+      }, 400);
+    };
+    const invalidateSm = () => {
+      if (timer.sm) clearTimeout(timer.sm);
+      timer.sm = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["dashboard_sm"] }), 400);
+    };
     const ch = supabase
       .channel("dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => { void load(); void loadStatusMovement(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "calls" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "statuses" }, () => { void load(); void loadStatusMovement(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => loadPunch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => { invalidateMain(); invalidateSm(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "calls" }, invalidateMain)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, invalidateMain)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        if (timer.main) clearTimeout(timer.main);
+        timer.main = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["dashboard_tasks"] }), 400);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "statuses" }, () => {
+        void queryClient.invalidateQueries({ queryKey: ["statuses"] });
+        invalidateSm();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => void queryClient.invalidateQueries({ queryKey: ["punch"] }))
       .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+    return () => {
+      if (timer.main) clearTimeout(timer.main);
+      if (timer.sm) clearTimeout(timer.sm);
+      void supabase.removeChannel(ch);
+    };
   }, [user]);
-
-  // Load profiles list for the team-member filter (only useful for managers, but harmless otherwise — RLS will restrict)
-  useEffect(() => {
-    if (!user) return;
-    void (async () => {
-      const { data } = await (supabase as any).from("profiles_directory").select("id, full_name, email").order("full_name");
-      setProfiles((data ?? []) as ProfileLite[]);
-    })();
-  }, [user]);
-
-  async function loadStatusMovement() {
-    if (!user) return;
-    setSmLoading(true);
-    let q = supabase
-      .from("leads")
-      .select("id, client_name, status_id, sales_value, created_at");
-    if (isPM) {
-      // PM sees their assigned leads (no date filter needed)
-      q = q.eq("assigned_to", user.id);
-    } else {
-      q = q.gte("created_at", smFromIso).lte("created_at", smToIso);
-      if (smAssigned !== "all") q = q.eq("assigned_to", smAssigned);
-    }
-    const { data } = await q;
-    setSmLeads((data ?? []) as LeadLite[]);
-    setSmLoading(false);
-  }
-
-  async function loadPunch() {
-    if (!user) return;
-    const workDate = format(new Date(), "yyyy-MM-dd");
-    const { data } = await supabase.from("attendance").select("id, punch_in_at, punch_out_at").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
-    setPunch(data ?? null);
-  }
-
-  async function load() {
-    if (!user) return;
-    setLoading(true);
-    const todayStart = startOfDay(new Date()).toISOString();
-    const todayEnd = endOfDay(new Date()).toISOString();
-    // PM gets ALL their assigned leads (no created_at filter — leads were created by callers)
-    const leadsQuery = isPM
-      ? supabase.from("leads").select("id, client_name, status_id, sales_value, created_at, assigned_to").eq("assigned_to", user.id)
-      : supabase.from("leads").select("id, client_name, status_id, sales_value, created_at").gte("created_at", fromIso).lte("created_at", toIso);
-    const [s, l, calls, callsTodayRes, mSched, t, _p] = await Promise.all([
-      supabase.from("statuses").select("id, name, color, is_sales, is_lost, sort_order").order("sort_order"),
-      leadsQuery,
-      supabase.from("calls").select("lead_id").eq("status", "connected").gte("called_at", fromIso).lte("called_at", toIso),
-      supabase.from("calls").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("called_at", todayStart).lte("called_at", todayEnd),
-      supabase.from("meetings").select("id", { count: "exact", head: true }).gte("scheduled_at", fromIso).lte("scheduled_at", toIso),
-      supabase.from("tasks").select("id, title, due_date, lead_id").eq("status", "pending").eq("created_by", user.id).order("due_date", { ascending: true, nullsFirst: false }).limit(50),
-      loadPunch(),
-    ]);
-    const statusRows = (s.data ?? []) as StatusRow[];
-    const leadRows = (l.data ?? []) as LeadLite[];
-    setStatuses(statusRows);
-    setLeads(leadRows);
-    setConnectedLeadIds(new Set((calls.data ?? []).map((c: { lead_id: string }) => c.lead_id)));
-    setCallsToday(callsTodayRes.count ?? 0);
-    setMeetingsScheduled(mSched.count ?? 0);
-    setPendingTasks((t.data ?? []) as typeof pendingTasks);
-    setLoading(false);
-  }
 
   const totalLeads = leads.length;
   const connectedCount = connectedLeadIds.size;
@@ -202,7 +253,6 @@ function Page() {
       setSmFrom(format(startOfYear(now), "yyyy-MM-dd"));
       setSmTo(format(now, "yyyy-MM-dd"));
     }
-    // "custom" — leave dates as-is, user edits inputs manually
   }
 
   async function punchIn() {
@@ -213,12 +263,11 @@ function Page() {
     setBusyPunch(false);
     if (error) return toast.error(error.message);
     toast.success("Punched in");
-    void loadPunch();
+    void queryClient.invalidateQueries({ queryKey: ["punch"] });
   }
 
   async function punchOut() {
     if (!user || !punch) return;
-    // Check pending workflow items
     const workDate = format(new Date(), "yyyy-MM-dd");
     const { data: flow } = await supabase.from("calling_flows").select("id").eq("user_id", user.id).eq("work_date", workDate).maybeSingle();
     if (flow) {
@@ -236,7 +285,7 @@ function Page() {
     if (error) return toast.error(error.message);
     toast.success("Punched out");
     setPunchOutGuard(null);
-    void loadPunch();
+    void queryClient.invalidateQueries({ queryKey: ["punch"] });
   }
 
   async function movePendingToTomorrow() {

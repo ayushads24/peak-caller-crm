@@ -38,7 +38,7 @@ import {
   ChevronLeft,
   MoreHorizontal,
 } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { whatsappUrl } from "@/lib/utils";
@@ -100,10 +100,21 @@ export function LeadDetailSheet({
   const { user } = useAuth();
   useAndroidBack(open, () => onOpenChange(false));
   useCallTracker();
+  const swipeTouchStartX = useRef(0);
+  const swipeTouchStartY = useRef(0);
+  const handleSwipeTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+  }, []);
+  const handleSwipeTouchEnd = useCallback((e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const dy = Math.abs(e.changedTouches[0].clientY - swipeTouchStartY.current);
+    if (dx > 80 && dy < 100 && dx > dy) onOpenChange(false);
+  }, [onOpenChange]);
   const canDelete = true;
   const appSettings = useAppSettings();
   const dtTemplate = appSettings.doubletick_chat_url ?? "";
-  const [notes, setNotes] = useState<{ id: string; content: string; created_at: string }[]>([]);
+  const [notes, setNotes] = useState<{ id: string; content: string; created_at: string; created_by?: string | null; author?: string | null }[]>([]);
   const [tasks, setTasks] = useState<
     {
       id: string;
@@ -111,10 +122,11 @@ export function LeadDetailSheet({
       status: string;
       due_date: string | null;
       assigned_to: string | null;
+      created_at: string;
     }[]
   >([]);
   const [activities, setActivities] = useState<
-    { id: string; description: string; created_at: string; type: string }[]
+    { id: string; description: string; created_at: string; type: string; author?: string | null }[]
   >([]);
   const [leadLabelIds, setLeadLabelIds] = useState<string[]>([]);
   const [noteText, setNoteText] = useState("");
@@ -143,22 +155,26 @@ export function LeadDetailSheet({
       if (!res.ok) { setSaving(false); return toast.error("Could not change assignee"); }
     }
 
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        client_name: edit.client_name,
-        email: edit.email,
-        phone: edit.phone,
-        sales_value: edit.sales_value,
-        lead_source: edit.lead_source,
-        status_id: edit.status_id,
-        assigned_to: edit.assigned_to ?? null,
-        doubletick_contact_id: edit.doubletick_contact_id ?? null,
-        ...(statusChanged ? { status_changed_at: new Date().toISOString() } : {}),
-      } as any)
-      .eq("id", edit.id);
+    const res = await fetch("/api/update-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        leadId: edit.id,
+        userId: user.id,
+        fields: {
+          client_name: edit.client_name,
+          email: edit.email,
+          phone: edit.phone,
+          sales_value: edit.sales_value,
+          lead_source: edit.lead_source,
+          status_id: edit.status_id,
+          doubletick_contact_id: edit.doubletick_contact_id ?? null,
+          ...(statusChanged ? { status_changed_at: new Date().toISOString() } : {}),
+        },
+      }),
+    });
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (!res.ok) return toast.error(await res.text());
     savedRef.current = { ...edit };
     toast.success("Lead updated", { id: "lead-updated" });
     onChanged();
@@ -183,29 +199,21 @@ export function LeadDetailSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onNext, onPrev]);
 
+
   async function loadRelated(id: string) {
-    const [n, t, a, ll] = await Promise.all([
-      supabase
-        .from("notes")
-        .select("id, content, created_at")
-        .eq("lead_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("tasks")
-        .select("id, title, status, due_date, assigned_to")
-        .eq("lead_id", id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("activities")
-        .select("id, description, created_at, type")
-        .eq("lead_id", id)
-        .order("created_at", { ascending: false }),
-      supabase.from("lead_labels").select("label_id").eq("lead_id", id),
-    ]);
-    setNotes(n.data ?? []);
-    setTasks((t.data ?? []) as typeof tasks);
-    setActivities((a.data ?? []) as typeof activities);
-    setLeadLabelIds((ll.data ?? []).map((r: { label_id: string }) => r.label_id));
+    const res = await fetch(`/api/lead-related?lead_id=${id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setNotes(data.notes ?? []);
+    const sortedTasks = (data.tasks ?? []).slice().sort((a: { due_date: string | null; created_at: string }, b: { due_date: string | null; created_at: string }) => {
+      const ad = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+      const bd = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+      if (ad !== bd) return ad - bd;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    setTasks(sortedTasks as typeof tasks);
+    setActivities((data.activities ?? []) as typeof activities);
+    setLeadLabelIds(data.leadLabelIds ?? []);
   }
 
   /* Auto-save when edit diverges from last saved state */
@@ -253,15 +261,18 @@ export function LeadDetailSheet({
 
   async function addTask() {
     if (!taskTitle.trim() || !user) return;
-    const { error } = await supabase.from("tasks").insert({
-      lead_id: lead!.id,
-      title: taskTitle,
-      created_by: user.id,
-      status: "pending",
-      due_date: taskDue ? new Date(taskDue).toISOString() : null,
-      assigned_to: taskAssignee || null,
+    const res = await fetch("/api/add-task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_id: lead!.id,
+        title: taskTitle,
+        created_by: user.id,
+        due_date: taskDue ? new Date(taskDue).toISOString() : null,
+        assigned_to: taskAssignee || null,
+      }),
     });
-    if (error) return toast.error(error.message);
+    if (!res.ok) return toast.error("Failed to add task");
     setTaskTitle("");
     setTaskDue("");
     setTaskAssignee("");
@@ -294,21 +305,23 @@ export function LeadDetailSheet({
 
   async function addLabel(labelId: string) {
     if (!labelId || leadLabelIds.includes(labelId)) return;
-    const { error } = await supabase
-      .from("lead_labels")
-      .insert({ lead_id: lead!.id, label_id: labelId });
-    if (error) return toast.error(error.message);
+    const res = await fetch("/api/update-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadId: lead!.id, labelAction: { action: "add", labelId } }),
+    });
+    if (!res.ok) return toast.error(await res.text());
     setLeadLabelIds((ids) => [...ids, labelId]);
     onChanged();
   }
 
   async function removeLabel(labelId: string) {
-    const { error } = await supabase
-      .from("lead_labels")
-      .delete()
-      .eq("lead_id", lead!.id)
-      .eq("label_id", labelId);
-    if (error) return toast.error(error.message);
+    const res = await fetch("/api/update-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadId: lead!.id, labelAction: { action: "remove", labelId } }),
+    });
+    if (!res.ok) return toast.error(await res.text());
     setLeadLabelIds((ids) => ids.filter((i) => i !== labelId));
     onChanged();
   }
@@ -321,7 +334,7 @@ export function LeadDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl lg:max-w-5xl overflow-hidden p-0 flex flex-col">
+      <SheetContent className="w-full sm:max-w-xl lg:max-w-5xl overflow-hidden p-0 flex flex-col" onTouchStart={handleSwipeTouchStart} onTouchEnd={handleSwipeTouchEnd}>
         {/* Sticky header */}
         <SheetHeader className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b px-5 pt-5 pb-3 space-y-3">
           <SheetTitle asChild>
@@ -332,7 +345,7 @@ export function LeadDetailSheet({
                   <span className="font-display text-xl truncate">{edit.client_name}</span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate mt-0.5">
-                  Created {formatDistanceToNow(new Date(edit.created_at), { addSuffix: true })}
+                  Created {format(new Date(edit.created_at), "d MMM yyyy")}
                   {assignedProfile && (
                     <> · Owner: {assignedProfile.full_name || assignedProfile.email}</>
                   )}
@@ -728,7 +741,10 @@ export function LeadDetailSheet({
                 <div key={n.id} className="rounded-lg border bg-card p-3 text-sm">
                   <p>{n.content}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                    {n.author && (
+                      <span className="font-medium text-foreground/70">{n.author} · </span>
+                    )}
+                    {format(new Date(n.created_at), "d MMM yyyy, h:mm a")}
                   </p>
                 </div>
               ))}
@@ -812,14 +828,15 @@ export function LeadDetailSheet({
               )}
             </TabsContent>
 
-            <TabsContent value="activity" className="mt-4">
+            <TabsContent value="activity" className="mt-4 space-y-4">
               <div className="relative pl-5 border-l border-border space-y-4">
                 {activities.map((a) => (
                   <div key={a.id} className="relative">
-                    <span className="absolute -left-[23px] top-1.5 size-2.5 rounded-full bg-primary ring-4 ring-background" />
+                    <span className={`absolute -left-[23px] top-1.5 size-2.5 rounded-full ring-4 ring-background ${a.type === "call_logged" ? "bg-emerald-500" : "bg-primary"}`} />
                     <p className="text-sm">{a.description}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                      {a.author && <span className="font-medium text-foreground/70">{a.author} · </span>}
+                      {format(new Date(a.created_at), "d MMM yyyy, h:mm a")}
                     </p>
                   </div>
                 ))}

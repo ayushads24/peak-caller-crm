@@ -15,12 +15,34 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiWorkflowTodayRouteImport } from './routes/api/workflow-today'
+import { Route as ApiUpdateTaskRouteImport } from './routes/api/update-task'
+import { Route as ApiUpdateLeadRouteImport } from './routes/api/update-lead'
+import { Route as ApiTeamTasksRouteImport } from './routes/api/team-tasks'
+import { Route as ApiTeamTaskUpdateRouteImport } from './routes/api/team-task-update'
+import { Route as ApiTeamTaskCommentRouteImport } from './routes/api/team-task-comment'
+import { Route as ApiTasksByUserRouteImport } from './routes/api/tasks-by-user'
+import { Route as ApiSyncDoubletickRouteImport } from './routes/api/sync-doubletick'
+import { Route as ApiRunMigrationRouteImport } from './routes/api/run-migration'
+import { Route as ApiPushSubscribeRouteImport } from './routes/api/push-subscribe'
+import { Route as ApiPushSendRouteImport } from './routes/api/push-send'
+import { Route as ApiPushCronDueRouteImport } from './routes/api/push-cron-due'
+import { Route as ApiLogCallRouteImport } from './routes/api/log-call'
+import { Route as ApiLeadsByIdsRouteImport } from './routes/api/leads-by-ids'
+import { Route as ApiLeaderboardCallsRouteImport } from './routes/api/leaderboard-calls'
+import { Route as ApiLeadRelatedRouteImport } from './routes/api/lead-related'
+import { Route as ApiFcmTokenRouteImport } from './routes/api/fcm-token'
+import { Route as ApiDueTasksRouteImport } from './routes/api/due-tasks'
 import { Route as ApiAssignLeadRouteImport } from './routes/api/assign-lead'
 import { Route as ApiAllLeadsRouteImport } from './routes/api/all-leads'
+import { Route as ApiAllActivitiesRouteImport } from './routes/api/all-activities'
+import { Route as ApiAddTaskRouteImport } from './routes/api/add-task'
 import { Route as AuthenticatedWorkflowRouteImport } from './routes/_authenticated/workflow'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedTeamWorkflowsRouteImport } from './routes/_authenticated/team-workflows'
+import { Route as AuthenticatedTeamTasksRouteImport } from './routes/_authenticated/team-tasks'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedRateListRouteImport } from './routes/_authenticated/rate-list'
 import { Route as AuthenticatedMyTasksRouteImport } from './routes/_authenticated/my-tasks'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedLeaderboardRouteImport } from './routes/_authenticated/leaderboard'
@@ -30,6 +52,7 @@ import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedLeadsLeadIdRouteImport } from './routes/_authenticated/leads.$leadId'
+import { Route as ApiPublicWebhookSheetsRouteImport } from './routes/api/public/webhook.sheets'
 import { Route as ApiPublicWebhookFacebookRouteImport } from './routes/api/public/webhook.facebook'
 import { Route as ApiPublicWebhookDoubletickRouteImport } from './routes/api/public/webhook.doubletick'
 
@@ -62,6 +85,96 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWorkflowTodayRoute = ApiWorkflowTodayRouteImport.update({
+  id: '/api/workflow-today',
+  path: '/api/workflow-today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUpdateTaskRoute = ApiUpdateTaskRouteImport.update({
+  id: '/api/update-task',
+  path: '/api/update-task',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUpdateLeadRoute = ApiUpdateLeadRouteImport.update({
+  id: '/api/update-lead',
+  path: '/api/update-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTeamTasksRoute = ApiTeamTasksRouteImport.update({
+  id: '/api/team-tasks',
+  path: '/api/team-tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTeamTaskUpdateRoute = ApiTeamTaskUpdateRouteImport.update({
+  id: '/api/team-task-update',
+  path: '/api/team-task-update',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTeamTaskCommentRoute = ApiTeamTaskCommentRouteImport.update({
+  id: '/api/team-task-comment',
+  path: '/api/team-task-comment',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTasksByUserRoute = ApiTasksByUserRouteImport.update({
+  id: '/api/tasks-by-user',
+  path: '/api/tasks-by-user',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSyncDoubletickRoute = ApiSyncDoubletickRouteImport.update({
+  id: '/api/sync-doubletick',
+  path: '/api/sync-doubletick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRunMigrationRoute = ApiRunMigrationRouteImport.update({
+  id: '/api/run-migration',
+  path: '/api/run-migration',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushSubscribeRoute = ApiPushSubscribeRouteImport.update({
+  id: '/api/push-subscribe',
+  path: '/api/push-subscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushSendRoute = ApiPushSendRouteImport.update({
+  id: '/api/push-send',
+  path: '/api/push-send',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushCronDueRoute = ApiPushCronDueRouteImport.update({
+  id: '/api/push-cron-due',
+  path: '/api/push-cron-due',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLogCallRoute = ApiLogCallRouteImport.update({
+  id: '/api/log-call',
+  path: '/api/log-call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLeadsByIdsRoute = ApiLeadsByIdsRouteImport.update({
+  id: '/api/leads-by-ids',
+  path: '/api/leads-by-ids',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLeaderboardCallsRoute = ApiLeaderboardCallsRouteImport.update({
+  id: '/api/leaderboard-calls',
+  path: '/api/leaderboard-calls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLeadRelatedRoute = ApiLeadRelatedRouteImport.update({
+  id: '/api/lead-related',
+  path: '/api/lead-related',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFcmTokenRoute = ApiFcmTokenRouteImport.update({
+  id: '/api/fcm-token',
+  path: '/api/fcm-token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDueTasksRoute = ApiDueTasksRouteImport.update({
+  id: '/api/due-tasks',
+  path: '/api/due-tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAssignLeadRoute = ApiAssignLeadRouteImport.update({
   id: '/api/assign-lead',
   path: '/api/assign-lead',
@@ -70,6 +183,16 @@ const ApiAssignLeadRoute = ApiAssignLeadRouteImport.update({
 const ApiAllLeadsRoute = ApiAllLeadsRouteImport.update({
   id: '/api/all-leads',
   path: '/api/all-leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAllActivitiesRoute = ApiAllActivitiesRouteImport.update({
+  id: '/api/all-activities',
+  path: '/api/all-activities',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAddTaskRoute = ApiAddTaskRouteImport.update({
+  id: '/api/add-task',
+  path: '/api/add-task',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedWorkflowRoute = AuthenticatedWorkflowRouteImport.update({
@@ -88,9 +211,19 @@ const AuthenticatedTeamWorkflowsRoute =
     path: '/team-workflows',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedTeamTasksRoute = AuthenticatedTeamTasksRouteImport.update({
+  id: '/team-tasks',
+  path: '/team-tasks',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRateListRoute = AuthenticatedRateListRouteImport.update({
+  id: '/rate-list',
+  path: '/rate-list',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedMyTasksRoute = AuthenticatedMyTasksRouteImport.update({
@@ -142,6 +275,11 @@ const AuthenticatedLeadsLeadIdRoute =
     path: '/$leadId',
     getParentRoute: () => AuthenticatedLeadsRoute,
   } as any)
+const ApiPublicWebhookSheetsRoute = ApiPublicWebhookSheetsRouteImport.update({
+  id: '/api/public/webhook/sheets',
+  path: '/api/public/webhook/sheets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhookFacebookRoute =
   ApiPublicWebhookFacebookRouteImport.update({
     id: '/api/public/webhook/facebook',
@@ -169,15 +307,38 @@ export interface FileRoutesByFullPath {
   '/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/my-tasks': typeof AuthenticatedMyTasksRoute
+  '/rate-list': typeof AuthenticatedRateListRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/add-task': typeof ApiAddTaskRoute
+  '/api/all-activities': typeof ApiAllActivitiesRoute
   '/api/all-leads': typeof ApiAllLeadsRoute
   '/api/assign-lead': typeof ApiAssignLeadRoute
+  '/api/due-tasks': typeof ApiDueTasksRoute
+  '/api/fcm-token': typeof ApiFcmTokenRoute
+  '/api/lead-related': typeof ApiLeadRelatedRoute
+  '/api/leaderboard-calls': typeof ApiLeaderboardCallsRoute
+  '/api/leads-by-ids': typeof ApiLeadsByIdsRoute
+  '/api/log-call': typeof ApiLogCallRoute
+  '/api/push-cron-due': typeof ApiPushCronDueRoute
+  '/api/push-send': typeof ApiPushSendRoute
+  '/api/push-subscribe': typeof ApiPushSubscribeRoute
+  '/api/run-migration': typeof ApiRunMigrationRoute
+  '/api/sync-doubletick': typeof ApiSyncDoubletickRoute
+  '/api/tasks-by-user': typeof ApiTasksByUserRoute
+  '/api/team-task-comment': typeof ApiTeamTaskCommentRoute
+  '/api/team-task-update': typeof ApiTeamTaskUpdateRoute
+  '/api/team-tasks': typeof ApiTeamTasksRoute
+  '/api/update-lead': typeof ApiUpdateLeadRoute
+  '/api/update-task': typeof ApiUpdateTaskRoute
+  '/api/workflow-today': typeof ApiWorkflowTodayRoute
   '/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
+  '/api/public/webhook/sheets': typeof ApiPublicWebhookSheetsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -193,15 +354,38 @@ export interface FileRoutesByTo {
   '/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/my-tasks': typeof AuthenticatedMyTasksRoute
+  '/rate-list': typeof AuthenticatedRateListRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/add-task': typeof ApiAddTaskRoute
+  '/api/all-activities': typeof ApiAllActivitiesRoute
   '/api/all-leads': typeof ApiAllLeadsRoute
   '/api/assign-lead': typeof ApiAssignLeadRoute
+  '/api/due-tasks': typeof ApiDueTasksRoute
+  '/api/fcm-token': typeof ApiFcmTokenRoute
+  '/api/lead-related': typeof ApiLeadRelatedRoute
+  '/api/leaderboard-calls': typeof ApiLeaderboardCallsRoute
+  '/api/leads-by-ids': typeof ApiLeadsByIdsRoute
+  '/api/log-call': typeof ApiLogCallRoute
+  '/api/push-cron-due': typeof ApiPushCronDueRoute
+  '/api/push-send': typeof ApiPushSendRoute
+  '/api/push-subscribe': typeof ApiPushSubscribeRoute
+  '/api/run-migration': typeof ApiRunMigrationRoute
+  '/api/sync-doubletick': typeof ApiSyncDoubletickRoute
+  '/api/tasks-by-user': typeof ApiTasksByUserRoute
+  '/api/team-task-comment': typeof ApiTeamTaskCommentRoute
+  '/api/team-task-update': typeof ApiTeamTaskUpdateRoute
+  '/api/team-tasks': typeof ApiTeamTasksRoute
+  '/api/update-lead': typeof ApiUpdateLeadRoute
+  '/api/update-task': typeof ApiUpdateTaskRoute
+  '/api/workflow-today': typeof ApiWorkflowTodayRoute
   '/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
+  '/api/public/webhook/sheets': typeof ApiPublicWebhookSheetsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -219,15 +403,38 @@ export interface FileRoutesById {
   '/_authenticated/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/_authenticated/my-tasks': typeof AuthenticatedMyTasksRoute
+  '/_authenticated/rate-list': typeof AuthenticatedRateListRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/_authenticated/team-workflows': typeof AuthenticatedTeamWorkflowsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/workflow': typeof AuthenticatedWorkflowRoute
+  '/api/add-task': typeof ApiAddTaskRoute
+  '/api/all-activities': typeof ApiAllActivitiesRoute
   '/api/all-leads': typeof ApiAllLeadsRoute
   '/api/assign-lead': typeof ApiAssignLeadRoute
+  '/api/due-tasks': typeof ApiDueTasksRoute
+  '/api/fcm-token': typeof ApiFcmTokenRoute
+  '/api/lead-related': typeof ApiLeadRelatedRoute
+  '/api/leaderboard-calls': typeof ApiLeaderboardCallsRoute
+  '/api/leads-by-ids': typeof ApiLeadsByIdsRoute
+  '/api/log-call': typeof ApiLogCallRoute
+  '/api/push-cron-due': typeof ApiPushCronDueRoute
+  '/api/push-send': typeof ApiPushSendRoute
+  '/api/push-subscribe': typeof ApiPushSubscribeRoute
+  '/api/run-migration': typeof ApiRunMigrationRoute
+  '/api/sync-doubletick': typeof ApiSyncDoubletickRoute
+  '/api/tasks-by-user': typeof ApiTasksByUserRoute
+  '/api/team-task-comment': typeof ApiTeamTaskCommentRoute
+  '/api/team-task-update': typeof ApiTeamTaskUpdateRoute
+  '/api/team-tasks': typeof ApiTeamTasksRoute
+  '/api/update-lead': typeof ApiUpdateLeadRoute
+  '/api/update-task': typeof ApiUpdateTaskRoute
+  '/api/workflow-today': typeof ApiWorkflowTodayRoute
   '/_authenticated/leads/$leadId': typeof AuthenticatedLeadsLeadIdRoute
   '/api/public/webhook/doubletick': typeof ApiPublicWebhookDoubletickRoute
   '/api/public/webhook/facebook': typeof ApiPublicWebhookFacebookRoute
+  '/api/public/webhook/sheets': typeof ApiPublicWebhookSheetsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -245,15 +452,38 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/leads'
     | '/my-tasks'
+    | '/rate-list'
     | '/settings'
+    | '/team-tasks'
     | '/team-workflows'
     | '/users'
     | '/workflow'
+    | '/api/add-task'
+    | '/api/all-activities'
     | '/api/all-leads'
     | '/api/assign-lead'
+    | '/api/due-tasks'
+    | '/api/fcm-token'
+    | '/api/lead-related'
+    | '/api/leaderboard-calls'
+    | '/api/leads-by-ids'
+    | '/api/log-call'
+    | '/api/push-cron-due'
+    | '/api/push-send'
+    | '/api/push-subscribe'
+    | '/api/run-migration'
+    | '/api/sync-doubletick'
+    | '/api/tasks-by-user'
+    | '/api/team-task-comment'
+    | '/api/team-task-update'
+    | '/api/team-tasks'
+    | '/api/update-lead'
+    | '/api/update-task'
+    | '/api/workflow-today'
     | '/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
+    | '/api/public/webhook/sheets'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -269,15 +499,38 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/leads'
     | '/my-tasks'
+    | '/rate-list'
     | '/settings'
+    | '/team-tasks'
     | '/team-workflows'
     | '/users'
     | '/workflow'
+    | '/api/add-task'
+    | '/api/all-activities'
     | '/api/all-leads'
     | '/api/assign-lead'
+    | '/api/due-tasks'
+    | '/api/fcm-token'
+    | '/api/lead-related'
+    | '/api/leaderboard-calls'
+    | '/api/leads-by-ids'
+    | '/api/log-call'
+    | '/api/push-cron-due'
+    | '/api/push-send'
+    | '/api/push-subscribe'
+    | '/api/run-migration'
+    | '/api/sync-doubletick'
+    | '/api/tasks-by-user'
+    | '/api/team-task-comment'
+    | '/api/team-task-update'
+    | '/api/team-tasks'
+    | '/api/update-lead'
+    | '/api/update-task'
+    | '/api/workflow-today'
     | '/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
+    | '/api/public/webhook/sheets'
   id:
     | '__root__'
     | '/'
@@ -294,15 +547,38 @@ export interface FileRouteTypes {
     | '/_authenticated/leaderboard'
     | '/_authenticated/leads'
     | '/_authenticated/my-tasks'
+    | '/_authenticated/rate-list'
     | '/_authenticated/settings'
+    | '/_authenticated/team-tasks'
     | '/_authenticated/team-workflows'
     | '/_authenticated/users'
     | '/_authenticated/workflow'
+    | '/api/add-task'
+    | '/api/all-activities'
     | '/api/all-leads'
     | '/api/assign-lead'
+    | '/api/due-tasks'
+    | '/api/fcm-token'
+    | '/api/lead-related'
+    | '/api/leaderboard-calls'
+    | '/api/leads-by-ids'
+    | '/api/log-call'
+    | '/api/push-cron-due'
+    | '/api/push-send'
+    | '/api/push-subscribe'
+    | '/api/run-migration'
+    | '/api/sync-doubletick'
+    | '/api/tasks-by-user'
+    | '/api/team-task-comment'
+    | '/api/team-task-update'
+    | '/api/team-tasks'
+    | '/api/update-lead'
+    | '/api/update-task'
+    | '/api/workflow-today'
     | '/_authenticated/leads/$leadId'
     | '/api/public/webhook/doubletick'
     | '/api/public/webhook/facebook'
+    | '/api/public/webhook/sheets'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -312,10 +588,31 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  ApiAddTaskRoute: typeof ApiAddTaskRoute
+  ApiAllActivitiesRoute: typeof ApiAllActivitiesRoute
   ApiAllLeadsRoute: typeof ApiAllLeadsRoute
   ApiAssignLeadRoute: typeof ApiAssignLeadRoute
+  ApiDueTasksRoute: typeof ApiDueTasksRoute
+  ApiFcmTokenRoute: typeof ApiFcmTokenRoute
+  ApiLeadRelatedRoute: typeof ApiLeadRelatedRoute
+  ApiLeaderboardCallsRoute: typeof ApiLeaderboardCallsRoute
+  ApiLeadsByIdsRoute: typeof ApiLeadsByIdsRoute
+  ApiLogCallRoute: typeof ApiLogCallRoute
+  ApiPushCronDueRoute: typeof ApiPushCronDueRoute
+  ApiPushSendRoute: typeof ApiPushSendRoute
+  ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
+  ApiRunMigrationRoute: typeof ApiRunMigrationRoute
+  ApiSyncDoubletickRoute: typeof ApiSyncDoubletickRoute
+  ApiTasksByUserRoute: typeof ApiTasksByUserRoute
+  ApiTeamTaskCommentRoute: typeof ApiTeamTaskCommentRoute
+  ApiTeamTaskUpdateRoute: typeof ApiTeamTaskUpdateRoute
+  ApiTeamTasksRoute: typeof ApiTeamTasksRoute
+  ApiUpdateLeadRoute: typeof ApiUpdateLeadRoute
+  ApiUpdateTaskRoute: typeof ApiUpdateTaskRoute
+  ApiWorkflowTodayRoute: typeof ApiWorkflowTodayRoute
   ApiPublicWebhookDoubletickRoute: typeof ApiPublicWebhookDoubletickRoute
   ApiPublicWebhookFacebookRoute: typeof ApiPublicWebhookFacebookRoute
+  ApiPublicWebhookSheetsRoute: typeof ApiPublicWebhookSheetsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -362,6 +659,132 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/workflow-today': {
+      id: '/api/workflow-today'
+      path: '/api/workflow-today'
+      fullPath: '/api/workflow-today'
+      preLoaderRoute: typeof ApiWorkflowTodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/update-task': {
+      id: '/api/update-task'
+      path: '/api/update-task'
+      fullPath: '/api/update-task'
+      preLoaderRoute: typeof ApiUpdateTaskRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/update-lead': {
+      id: '/api/update-lead'
+      path: '/api/update-lead'
+      fullPath: '/api/update-lead'
+      preLoaderRoute: typeof ApiUpdateLeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team-tasks': {
+      id: '/api/team-tasks'
+      path: '/api/team-tasks'
+      fullPath: '/api/team-tasks'
+      preLoaderRoute: typeof ApiTeamTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team-task-update': {
+      id: '/api/team-task-update'
+      path: '/api/team-task-update'
+      fullPath: '/api/team-task-update'
+      preLoaderRoute: typeof ApiTeamTaskUpdateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/team-task-comment': {
+      id: '/api/team-task-comment'
+      path: '/api/team-task-comment'
+      fullPath: '/api/team-task-comment'
+      preLoaderRoute: typeof ApiTeamTaskCommentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tasks-by-user': {
+      id: '/api/tasks-by-user'
+      path: '/api/tasks-by-user'
+      fullPath: '/api/tasks-by-user'
+      preLoaderRoute: typeof ApiTasksByUserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sync-doubletick': {
+      id: '/api/sync-doubletick'
+      path: '/api/sync-doubletick'
+      fullPath: '/api/sync-doubletick'
+      preLoaderRoute: typeof ApiSyncDoubletickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/run-migration': {
+      id: '/api/run-migration'
+      path: '/api/run-migration'
+      fullPath: '/api/run-migration'
+      preLoaderRoute: typeof ApiRunMigrationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push-subscribe': {
+      id: '/api/push-subscribe'
+      path: '/api/push-subscribe'
+      fullPath: '/api/push-subscribe'
+      preLoaderRoute: typeof ApiPushSubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push-send': {
+      id: '/api/push-send'
+      path: '/api/push-send'
+      fullPath: '/api/push-send'
+      preLoaderRoute: typeof ApiPushSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push-cron-due': {
+      id: '/api/push-cron-due'
+      path: '/api/push-cron-due'
+      fullPath: '/api/push-cron-due'
+      preLoaderRoute: typeof ApiPushCronDueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/log-call': {
+      id: '/api/log-call'
+      path: '/api/log-call'
+      fullPath: '/api/log-call'
+      preLoaderRoute: typeof ApiLogCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/leads-by-ids': {
+      id: '/api/leads-by-ids'
+      path: '/api/leads-by-ids'
+      fullPath: '/api/leads-by-ids'
+      preLoaderRoute: typeof ApiLeadsByIdsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/leaderboard-calls': {
+      id: '/api/leaderboard-calls'
+      path: '/api/leaderboard-calls'
+      fullPath: '/api/leaderboard-calls'
+      preLoaderRoute: typeof ApiLeaderboardCallsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/lead-related': {
+      id: '/api/lead-related'
+      path: '/api/lead-related'
+      fullPath: '/api/lead-related'
+      preLoaderRoute: typeof ApiLeadRelatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/fcm-token': {
+      id: '/api/fcm-token'
+      path: '/api/fcm-token'
+      fullPath: '/api/fcm-token'
+      preLoaderRoute: typeof ApiFcmTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/due-tasks': {
+      id: '/api/due-tasks'
+      path: '/api/due-tasks'
+      fullPath: '/api/due-tasks'
+      preLoaderRoute: typeof ApiDueTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/assign-lead': {
       id: '/api/assign-lead'
       path: '/api/assign-lead'
@@ -374,6 +797,20 @@ declare module '@tanstack/react-router' {
       path: '/api/all-leads'
       fullPath: '/api/all-leads'
       preLoaderRoute: typeof ApiAllLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/all-activities': {
+      id: '/api/all-activities'
+      path: '/api/all-activities'
+      fullPath: '/api/all-activities'
+      preLoaderRoute: typeof ApiAllActivitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/add-task': {
+      id: '/api/add-task'
+      path: '/api/add-task'
+      fullPath: '/api/add-task'
+      preLoaderRoute: typeof ApiAddTaskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/workflow': {
@@ -397,11 +834,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeamWorkflowsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/team-tasks': {
+      id: '/_authenticated/team-tasks'
+      path: '/team-tasks'
+      fullPath: '/team-tasks'
+      preLoaderRoute: typeof AuthenticatedTeamTasksRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/rate-list': {
+      id: '/_authenticated/rate-list'
+      path: '/rate-list'
+      fullPath: '/rate-list'
+      preLoaderRoute: typeof AuthenticatedRateListRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/my-tasks': {
@@ -467,6 +918,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsLeadIdRouteImport
       parentRoute: typeof AuthenticatedLeadsRoute
     }
+    '/api/public/webhook/sheets': {
+      id: '/api/public/webhook/sheets'
+      path: '/api/public/webhook/sheets'
+      fullPath: '/api/public/webhook/sheets'
+      preLoaderRoute: typeof ApiPublicWebhookSheetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhook/facebook': {
       id: '/api/public/webhook/facebook'
       path: '/api/public/webhook/facebook'
@@ -504,7 +962,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLeaderboardRoute: typeof AuthenticatedLeaderboardRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRouteWithChildren
   AuthenticatedMyTasksRoute: typeof AuthenticatedMyTasksRoute
+  AuthenticatedRateListRoute: typeof AuthenticatedRateListRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTeamTasksRoute: typeof AuthenticatedTeamTasksRoute
   AuthenticatedTeamWorkflowsRoute: typeof AuthenticatedTeamWorkflowsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWorkflowRoute: typeof AuthenticatedWorkflowRoute
@@ -519,7 +979,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLeaderboardRoute: AuthenticatedLeaderboardRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRouteWithChildren,
   AuthenticatedMyTasksRoute: AuthenticatedMyTasksRoute,
+  AuthenticatedRateListRoute: AuthenticatedRateListRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTeamTasksRoute: AuthenticatedTeamTasksRoute,
   AuthenticatedTeamWorkflowsRoute: AuthenticatedTeamWorkflowsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWorkflowRoute: AuthenticatedWorkflowRoute,
@@ -536,10 +998,31 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  ApiAddTaskRoute: ApiAddTaskRoute,
+  ApiAllActivitiesRoute: ApiAllActivitiesRoute,
   ApiAllLeadsRoute: ApiAllLeadsRoute,
   ApiAssignLeadRoute: ApiAssignLeadRoute,
+  ApiDueTasksRoute: ApiDueTasksRoute,
+  ApiFcmTokenRoute: ApiFcmTokenRoute,
+  ApiLeadRelatedRoute: ApiLeadRelatedRoute,
+  ApiLeaderboardCallsRoute: ApiLeaderboardCallsRoute,
+  ApiLeadsByIdsRoute: ApiLeadsByIdsRoute,
+  ApiLogCallRoute: ApiLogCallRoute,
+  ApiPushCronDueRoute: ApiPushCronDueRoute,
+  ApiPushSendRoute: ApiPushSendRoute,
+  ApiPushSubscribeRoute: ApiPushSubscribeRoute,
+  ApiRunMigrationRoute: ApiRunMigrationRoute,
+  ApiSyncDoubletickRoute: ApiSyncDoubletickRoute,
+  ApiTasksByUserRoute: ApiTasksByUserRoute,
+  ApiTeamTaskCommentRoute: ApiTeamTaskCommentRoute,
+  ApiTeamTaskUpdateRoute: ApiTeamTaskUpdateRoute,
+  ApiTeamTasksRoute: ApiTeamTasksRoute,
+  ApiUpdateLeadRoute: ApiUpdateLeadRoute,
+  ApiUpdateTaskRoute: ApiUpdateTaskRoute,
+  ApiWorkflowTodayRoute: ApiWorkflowTodayRoute,
   ApiPublicWebhookDoubletickRoute: ApiPublicWebhookDoubletickRoute,
   ApiPublicWebhookFacebookRoute: ApiPublicWebhookFacebookRoute,
+  ApiPublicWebhookSheetsRoute: ApiPublicWebhookSheetsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
