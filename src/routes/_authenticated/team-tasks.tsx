@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useAndroidBack } from "@/hooks/use-android-back";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth, isAdminOrManager } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
+import { MultiUserSelect } from "@/components/multi-user-select";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/_authenticated/team-tasks")({
 
 type Status = "pending" | "in_progress" | "submitted" | "done";
 type Priority = "low" | "medium" | "high";
-type Tab = "for-me" | "by-me" | "all";
+type DateFilter = "all" | "today" | "week";
 
 interface TeamTask {
   id: string;
@@ -116,15 +117,17 @@ function pname(profiles: Map<string, Profile>, id: string | null) {
 }
 
 function TeamTasksPage() {
-  const { user, roles } = useAuth();
-  const canViewAll = isAdminOrManager(roles);
+  const { user } = useAuth();
 
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
   const [leads, setLeads] = useState<Map<string, LeadLite>>(new Map());
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("for-me");
+
+  const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<TeamTask | null>(null);
@@ -149,41 +152,83 @@ function TeamTasksPage() {
       .channel("team-tasks-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "team_tasks" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "team_task_comments" }, () => {
-        // refresh active task comments if open
         if (activeTask) setActiveTask((t) => t ? { ...t } : null);
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [user]);
 
-  // Load all profiles once for the assign dropdown
   useEffect(() => {
     void (async () => {
-      const { data } = await (supabase as any).from("profiles_directory").select("id,full_name,email").order("full_name");
+      const { data } = await (supabase as any).from("profiles").select("id,full_name,email").order("full_name");
       setAllProfiles((data ?? []) as Profile[]);
     })();
   }, []);
 
-  const filtered = tasks.filter((t) => {
-    if (!user) return false;
-    if (tab === "for-me") return t.assigned_to === user.id;
-    if (tab === "by-me") return t.created_by === user.id;
-    return true; // "all" tab — admin/TL only
-  });
-
-  const counts = {
-    "for-me": tasks.filter((t) => t.assigned_to === user?.id).length,
-    "by-me":  tasks.filter((t) => t.created_by === user?.id).length,
-    "all":    tasks.length,
-  };
-
-  // Keep activeTask in sync after reload
   useEffect(() => {
     if (activeTask) {
       const updated = tasks.find((t) => t.id === activeTask.id);
       if (updated) setActiveTask(updated);
     }
   }, [tasks]);
+
+  const now = new Date();
+
+  function matchesMember(t: TeamTask) {
+    if (selectedMembers.length === 0) return true;
+    return selectedMembers.includes(t.assigned_to);
+  }
+
+  function matchesDate(t: TeamTask) {
+    if (dateFilter === "all") return true;
+    if (!t.due_date) return false;
+    const due = new Date(t.due_date);
+    if (dateFilter === "today") return due.toDateString() === now.toDateString();
+    if (dateFilter === "week") {
+      const weekEnd = new Date(now);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      return due >= now && due <= weekEnd;
+    }
+    return true;
+  }
+
+  // Overdue: past due, not done, matches member filter — always shown separately when statusFilter=all
+  const overdueTasks = tasks.filter(
+    (t) => t.status !== "done" && t.due_date && new Date(t.due_date) < now && matchesMember(t)
+  );
+
+  // Main list: applies all filters; when showing "all" statuses, overdue tasks go to the separate section above
+  const filteredTasks = tasks.filter((t) => {
+    if (!matchesMember(t)) return false;
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (!matchesDate(t)) return false;
+    if (statusFilter === "all" && t.status !== "done" && t.due_date && new Date(t.due_date) < now) return false;
+    return true;
+  });
+
+  // Counts (member-filtered, date-agnostic)
+  const memberTasks = tasks.filter(matchesMember);
+  const counts: Record<"all" | Status, number> = {
+    all:         memberTasks.length,
+    pending:     memberTasks.filter((t) => t.status === "pending").length,
+    in_progress: memberTasks.filter((t) => t.status === "in_progress").length,
+    submitted:   memberTasks.filter((t) => t.status === "submitted").length,
+    done:        memberTasks.filter((t) => t.status === "done").length,
+  };
+
+  const STATUS_TABS: Array<{ value: "all" | Status; label: string }> = [
+    { value: "all",         label: "All" },
+    { value: "pending",     label: "Pending" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "submitted",   label: "Submitted" },
+    { value: "done",        label: "Done" },
+  ];
+
+  const DATE_BUTTONS: Array<{ value: DateFilter; label: string }> = [
+    { value: "all",   label: "All Dates" },
+    { value: "today", label: "Today" },
+    { value: "week",  label: "This Week" },
+  ];
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -197,35 +242,81 @@ function TeamTasksPage() {
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="for-me">
-            For Me <Badge variant="secondary" className="ml-1.5 text-[10px]">{counts["for-me"]}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="by-me">
-            By Me <Badge variant="secondary" className="ml-1.5 text-[10px]">{counts["by-me"]}</Badge>
-          </TabsTrigger>
-          {canViewAll && (
-            <TabsTrigger value="all">
-              All <Badge variant="secondary" className="ml-1.5 text-[10px]">{counts["all"]}</Badge>
+      {/* Status tabs */}
+      <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | Status)} className="mb-3">
+        <TabsList className="flex-wrap h-auto gap-0.5">
+          {STATUS_TABS.map(({ value, label }) => (
+            <TabsTrigger key={value} value={value} className="text-xs">
+              {label}
+              <Badge variant="secondary" className="ml-1.5 text-[10px]">{counts[value]}</Badge>
             </TabsTrigger>
-          )}
+          ))}
         </TabsList>
       </Tabs>
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="min-w-[180px] flex-1 max-w-xs">
+          <MultiUserSelect
+            profiles={allProfiles}
+            selected={selectedMembers}
+            onChange={setSelectedMembers}
+            placeholder="Filter by member..."
+          />
+        </div>
+        <div className="flex gap-1">
+          {DATE_BUTTONS.map(({ value, label }) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={dateFilter === value ? "default" : "outline"}
+              onClick={() => setDateFilter(value)}
+              className="text-xs h-8"
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Overdue section — only when viewing all statuses */}
+      {statusFilter === "all" && overdueTasks.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="size-4 text-red-500" />
+            <span className="text-sm font-semibold text-red-600">Overdue ({overdueTasks.length})</span>
+          </div>
+          <Card className="border-red-200 shadow-sm overflow-hidden">
+            <div className="divide-y divide-red-100">
+              {overdueTasks.map((t) => (
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  profiles={profiles}
+                  lead={t.lead_id ? leads.get(t.lead_id) : undefined}
+                  isMe={user?.id === t.assigned_to}
+                  onOpen={() => setActiveTask(t)}
+                />
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Main task list */}
       <Card className="shadow-card">
         {loading ? (
           <div className="py-16 grid place-items-center">
             <Loader2 className="size-6 animate-spin text-primary" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
             <ClipboardList className="size-8 mx-auto mb-2 opacity-40" />
             Koi task nahi.
           </div>
         ) : (
           <div className="divide-y">
-            {filtered.map((t) => (
+            {filteredTasks.map((t) => (
               <TaskCard
                 key={t.id}
                 task={t}
