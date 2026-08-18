@@ -43,6 +43,7 @@ import {
   MessageSquare,
   AlertTriangle,
   Trash2,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -54,7 +55,7 @@ export const Route = createFileRoute("/_authenticated/team-tasks")({
 
 type Status = "pending" | "in_progress" | "submitted" | "done";
 type Priority = "low" | "medium" | "high";
-type DateFilter = "all" | "today" | "week";
+type DateFilter = "all" | "today" | "week" | "custom";
 
 interface TeamTask {
   id: string;
@@ -128,6 +129,7 @@ function TeamTasksPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [customDate, setCustomDate] = useState<string>("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<TeamTask | null>(null);
@@ -189,6 +191,10 @@ function TeamTasksPage() {
       weekEnd.setDate(weekEnd.getDate() + 7);
       return due >= now && due <= weekEnd;
     }
+    if (dateFilter === "custom" && customDate) {
+      const picked = new Date(customDate);
+      return due.toDateString() === picked.toDateString();
+    }
     return true;
   }
 
@@ -224,8 +230,8 @@ function TeamTasksPage() {
     { value: "done",        label: "Done" },
   ];
 
-  const DATE_BUTTONS: Array<{ value: DateFilter; label: string }> = [
-    { value: "all",   label: "All Dates" },
+  const DATE_BUTTONS: Array<{ value: Exclude<DateFilter, "custom">; label: string }> = [
+    { value: "all",   label: "All" },
     { value: "today", label: "Today" },
     { value: "week",  label: "This Week" },
   ];
@@ -264,18 +270,42 @@ function TeamTasksPage() {
             placeholder="Filter by member..."
           />
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
           {DATE_BUTTONS.map(({ value, label }) => (
             <Button
               key={value}
               size="sm"
               variant={dateFilter === value ? "default" : "outline"}
-              onClick={() => setDateFilter(value)}
+              onClick={() => { setDateFilter(value); setCustomDate(""); }}
               className="text-xs h-8"
             >
               {label}
             </Button>
           ))}
+          {/* Custom date picker */}
+          <div className="relative flex items-center">
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => {
+                setCustomDate(e.target.value);
+                setDateFilter(e.target.value ? "custom" : "all");
+              }}
+              className={cn(
+                "h-8 rounded-md border text-xs px-2 pr-6 bg-background outline-none cursor-pointer",
+                "focus:ring-2 focus:ring-ring focus:ring-offset-1",
+                dateFilter === "custom" ? "border-primary ring-1 ring-primary" : "border-input"
+              )}
+            />
+            {customDate && (
+              <button
+                onClick={() => { setCustomDate(""); setDateFilter("all"); }}
+                className="absolute right-1.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
